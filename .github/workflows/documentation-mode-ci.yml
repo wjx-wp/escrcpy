@@ -76,3 +76,16 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=4096
         run: pnpm --filter escrcpy build
+
+      - name: Assert Documentation UX IPC handlers are bundled
+        shell: pwsh
+        run: |
+          $mainBundle = 'desktop/dist-electron/main.js'
+          if (-not (Test-Path $mainBundle)) {
+            throw "Electron main bundle was not generated: $mainBundle"
+          }
+          foreach ($pattern in @('documentation-workspace-get', 'documentation-dnd-enter', 'documentation-workspace-choose')) {
+            if (-not (Select-String -Path $mainBundle -Pattern $pattern -SimpleMatch -Quiet)) {
+              throw "Required Documentation UX IPC handler is missing from the Electron main bundle: $pattern"
+            }
+          }
