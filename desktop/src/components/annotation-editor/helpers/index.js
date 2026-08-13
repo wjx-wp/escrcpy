@@ -191,6 +191,178 @@ export function pixelateImageDataUrl(image, rect, blockSize = 14) {
   return output.toDataURL('image/png')
 }
 
+function getSourceCanvas(image) {
+  const canvas = document.createElement('canvas')
+  canvas.width = image.naturalWidth || image.width
+  canvas.height = image.naturalHeight || image.height
+  const context = canvas.getContext('2d', { willReadFrequently: true })
+  context.drawImage(image, 0, 0)
+  return { canvas, context }
+}
+
+function getPatchStats(context, rect) {
+  const width = Math.max(1, Math.round(rect.width))
+  const height = Math.max(1, Math.round(rect.height))
+  const imageData = context.getImageData(
+    Math.round(rect.left),
+    Math.round(rect.top),
+    width,
+    height,
+  )
+  const { data } = imageData
+  const stride = Math.max(1, Math.floor(Math.sqrt((width * height) / 5000)))
+
+  let count = 0
+  let sumR = 0
+  let sumG = 0
+  let sumB = 0
+  let sumSq = 0
+
+  for (let y = 0; y < height; y += stride) {
+    for (let x = 0; x < width; x += stride) {
+      const index = (y * width + x) * 4
+      const r = data[index]
+      const g = data[index + 1]
+      const b = data[index + 2]
+      const luminance = r * 0.2126 + g * 0.7152 + b * 0.0722
+      sumR += r
+      sumG += g
+      sumB += b
+      sumSq += luminance * luminance
+      count++
+    }
+  }
+
+  const meanR = sumR / Math.max(1, count)
+  const meanG = sumG / Math.max(1, count)
+  const meanB = sumB / Math.max(1, count)
+  const meanLum = meanR * 0.2126 + meanG * 0.7152 + meanB * 0.0722
+  const variance = Math.max(0, sumSq / Math.max(1, count) - meanLum * meanLum)
+
+  return {
+    color: [Math.round(meanR), Math.round(meanG), Math.round(meanB)],
+    variance,
+  }
+}
+
+function buildHealCandidates(target, width, height) {
+  const gap = Math.max(2, Math.round(Math.min(target.width, target.height) * 0.08))
+  const candidates = []
+
+  const add = (direction, left, top) => {
+    const candidate = clampRect(
+      {
+        left,
+        top,
+        width: target.width,
+        height: target.height,
+      },
+      width,
+      height,
+    )
+
+    if (candidate.width >= target.width * 0.92 && candidate.height >= target.height * 0.92) {
+      candidates.push({ direction, rect: candidate })
+    }
+  }
+
+  add('top', target.left, target.top - target.height - gap)
+  add('bottom', target.left, target.bottom + gap)
+  add('left', target.left - target.width - gap, target.top)
+  add('right', target.right + gap, target.top)
+
+  return candidates
+}
+
+function applyFeatherMask(context, width, height, feather) {
+  const amount = Math.max(0, Math.min(Math.min(width, height) / 3, feather))
+  if (amount < 1) {
+    return
+  }
+
+  context.globalCompositeOperation = 'destination-in'
+
+  const horizontal = context.createLinearGradient(0, 0, width, 0)
+  horizontal.addColorStop(0, 'rgba(255,255,255,0)')
+  horizontal.addColorStop(amount / width, 'rgba(255,255,255,1)')
+  horizontal.addColorStop(1 - amount / width, 'rgba(255,255,255,1)')
+  horizontal.addColorStop(1, 'rgba(255,255,255,0)')
+  context.fillStyle = horizontal
+  context.fillRect(0, 0, width, height)
+
+  const vertical = context.createLinearGradient(0, 0, 0, height)
+  vertical.addColorStop(0, 'rgba(255,255,255,0)')
+  vertical.addColorStop(amount / height, 'rgba(255,255,255,1)')
+  vertical.addColorStop(1 - amount / height, 'rgba(255,255,255,1)')
+  vertical.addColorStop(1, 'rgba(255,255,255,0)')
+  context.fillStyle = vertical
+  context.fillRect(0, 0, width, height)
+
+  context.globalCompositeOperation = 'source-over'
+}
+
+export function healImageDataUrl(image, rect, options = {}) {
+  const imageWidth = image.naturalWidth || image.width
+  const imageHeight = image.naturalHeight || image.height
+  const target = clampRect(rect, imageWidth, imageHeight)
+  const width = Math.max(1, Math.round(target.width))
+  const height = Math.max(1, Math.round(target.height))
+  const { context } = getSourceCanvas(image)
+
+  const candidates = buildHealCandidates(target, imageWidth, imageHeight)
+    .map((candidate) => {
+      const stats = getPatchStats(context, candidate.rect)
+      return { ...candidate, stats }
+    })
+    .sort((a, b) => a.stats.variance - b.stats.variance)
+
+  const best = candidates[0]
+  const output = document.createElement('canvas')
+  output.width = width
+  output.height = height
+  const outputContext = output.getContext('2d')
+  const uniformThreshold = options.uniformThreshold ?? 90
+
+  if (best && best.stats.variance <= uniformThreshold) {
+    const [r, g, b] = best.stats.color
+    outputContext.fillStyle = `rgb(${r}, ${g}, ${b})`
+    outputContext.fillRect(0, 0, width, height)
+  }
+  else if (best) {
+    outputContext.drawImage(
+      image,
+      best.rect.left,
+      best.rect.top,
+      best.rect.width,
+      best.rect.height,
+      0,
+      0,
+      width,
+      height,
+    )
+  }
+  else {
+    const fallback = getPatchStats(context, target)
+    const [r, g, b] = fallback.color
+    outputContext.fillStyle = `rgb(${r}, ${g}, ${b})`
+    outputContext.fillRect(0, 0, width, height)
+  }
+
+  applyFeatherMask(
+    outputContext,
+    width,
+    height,
+    options.feather ?? Math.max(2, Math.round(Math.min(width, height) * 0.08)),
+  )
+
+  return {
+    dataUrl: output.toDataURL('image/png'),
+    method: best?.stats?.variance <= uniformThreshold ? 'fill' : 'patch',
+    sourceDirection: best?.direction || 'average',
+    sourceRect: best?.rect || null,
+  }
+}
+
 export function getCanvasImageElement(fabricImage) {
   return fabricImage?.getElement?.() || null
 }
