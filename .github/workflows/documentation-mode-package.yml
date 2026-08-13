@@ -1,0 +1,78 @@
+name: documentation-mode-package
+
+on:
+  push:
+    branches:
+      - feature/documentation-mode
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: documentation-mode-package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-x64:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Enable corepack and pnpm
+        shell: pwsh
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.29.2 --activate
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build workspace dependencies
+        shell: pwsh
+        run: |
+          pnpm --filter @escrcpy/shared build
+          pnpm --filter @escrcpy/adbx build
+          pnpm --filter @escrcpy/unocss-preset-shades build
+          pnpm --filter @escrcpy/electron-ipcx build
+          pnpm --filter @escrcpy/electron-setup build
+
+      - name: Lint packaging files
+        run: >-
+          pnpm exec eslint
+          desktop/electron-builder.config.js
+          desktop/dev-publish.yml
+
+      - name: Build renderer and Electron main process
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: pnpm --filter escrcpy build
+
+      - name: Package Windows x64
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: pnpm --filter escrcpy build:electron -- --win --x64
+
+      - name: List release files
+        shell: pwsh
+        run: Get-ChildItem -Path desktop/dist-release -File | Select-Object Name, Length
+
+      - name: Upload Windows x64 package
+        uses: actions/upload-artifact@v6
+        with:
+          name: Escrcpy-Docs-3.0.8-docs.1-Windows-x64
+          path: |
+            desktop/dist-release/*x64.exe
+            desktop/dist-release/*x64.zip
+            desktop/dist-release/*x64.exe.blockmap
+            desktop/dist-release/latest*.yml
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

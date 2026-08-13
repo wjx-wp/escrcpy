@@ -1,4 +1,5 @@
 export { default as contextMenuService } from './context-menu/index.js'
+export { default as documentationService } from './documentation/index.js'
 export { default as edgerService } from './edger/index.js'
 export { default as handlesService } from './handles/index.js'
 export { default as launchService } from './launch/index.js'

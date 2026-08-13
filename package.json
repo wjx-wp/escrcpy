@@ -1,12 +1,12 @@
 {
   "name": "@escrcpy/workspace",
   "type": "module",
-  "version": "3.0.8",
+  "version": "3.0.8-docs.1",
   "private": true,
   "packageManager": "pnpm@10.29.2+sha512.bef43fa759d91fd2da4b319a5a0d13ef7a45bb985a3d7342058470f9d2051a3ba8674e629672654686ef9443ad13a82da2beb9eeb3e0221c87b8154fff9d74b8",
-  "description": "Scrcpy Powered by Electron",
-  "author": "viarotel",
-  "homepage": "https://github.com/viarotel-org/escrcpy",
+  "description": "Escrcpy Docs - Android mirroring, documentation capture and annotation",
+  "author": "viarotel contributors and wjx-wp",
+  "homepage": "https://github.com/wjx-wp/escrcpy",
   "main": "dist-electron/main.js",
   "scripts": {
     "lint": "eslint .",

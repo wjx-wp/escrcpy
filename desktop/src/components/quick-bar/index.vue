@@ -16,7 +16,7 @@
       <template #default="{ trigger, ...slotProps } = {}">
         <el-button
           v-bind="{
-            title: $t(item.tips || item.label),
+            title: item.title || $t(item.tips || item.label),
             circle: true,
             borderless: true,
             text: true,
@@ -39,6 +39,7 @@
 
 <script setup>
 import Arrange from './components/arrange/index.vue'
+import Documentation from './components/documentation/index.vue'
 import Log from './components/log/index.vue'
 import Restart from './components/restart/index.vue'
 import Search from './components/search/index.vue'
@@ -47,6 +48,12 @@ import Terminal from './components/terminal/index.vue'
 const props = defineProps({})
 
 const actionModel = [
+  {
+    label: 'Documentation Project',
+    title: '打开已保存的文档标注工程',
+    fontIcon: 'i-bi-folder2-open',
+    component: Documentation,
+  },
   {
     label: 'device.arrange.name',
     fontIcon: 'i-bi-window-split',

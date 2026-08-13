@@ -1,4 +1,4 @@
 provider: github
-owner: viarotel-org
+owner: wjx-wp
 repo: escrcpy
-updaterCacheDirName: escrcpy-updater
+updaterCacheDirName: escrcpy-docs-updater

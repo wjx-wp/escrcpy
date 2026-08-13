@@ -42,13 +42,14 @@
               floating,
             }"
           >
-            <template #default="{ loading = false, trigger } = {}">
+            <template #default="{ loading = false, active = false, trigger } = {}">
               <el-button
                 type="primary"
                 plain
                 class="!border-none !mx-0 !py-0 !rounded-0"
                 :class="[
                   ['unauthorized', 'offline'].includes(device.status) ? '!bg-transparent' : '',
+                  active ? '!bg-primary-500 !text-white' : '',
                   buttonClass,
                 ]"
                 :style="{
@@ -56,7 +57,7 @@
                   ...buttonHeightStyle,
                 }"
                 :disabled="['unauthorized', 'offline'].includes(device.status)"
-                :title="$t(item.tips || item.label)"
+                :title="item.title || $t(item.tips || item.label)"
                 :loading="loading"
                 @click="handleClick(item, trigger || item.trigger)"
               >
@@ -92,6 +93,9 @@
 
 <script>
 import { controlBarHeight } from '$control/configs/index.js'
+import Annotate from './annotate/index.vue'
+import DocumentCapture from './document-capture/index.vue'
+import Documentation from './documentation/index.vue'
 import Install from './install/index.vue'
 import Launch from './launch/index.vue'
 import Explorer from './explorer/index.vue'
@@ -103,6 +107,9 @@ import Volume from './volume/index.vue'
 
 export default {
   components: {
+    Annotate,
+    DocumentCapture,
+    Documentation,
     Screenshot,
     Install,
     Launch,
@@ -201,6 +208,24 @@ export default {
           label: 'device.control.capture',
           fontIcon: 'i-simple-line-icons-camera',
           component: 'Screenshot',
+        },
+        documentation: {
+          label: 'Documentation Mode',
+          title: '文档模式：清理状态栏并在退出 Escrcpy 时自动恢复',
+          fontIcon: 'i-bi-journal-check',
+          component: 'Documentation',
+        },
+        documentCapture: {
+          label: 'Documentation Capture',
+          title: '文档原图截图（F8）',
+          fontIcon: 'i-bi-camera-fill',
+          component: 'DocumentCapture',
+        },
+        annotate: {
+          label: 'Annotate Screenshot',
+          title: '截图并标注（Shift+F8）',
+          fontIcon: 'i-bi-pencil-square',
+          component: 'Annotate',
         },
         reboot: {
           label: 'device.control.reboot',
