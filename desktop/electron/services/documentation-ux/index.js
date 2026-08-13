@@ -393,7 +393,7 @@ async function captureDocumentationScreen(payload = {}) {
 
   const fallback = await captureViaSystemUi(deviceId, savePath, {
     cleanupDeviceCopy,
-  }).catch((error) => ({
+  }).catch(error => ({
     success: false,
     reason: error?.message || String(error),
   }))
