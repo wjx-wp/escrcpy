@@ -32,12 +32,10 @@ export default {
   ],
 
   win: {
-    icon: 'logo.ico',
-    target: [
-      { target: 'nsis', arch: ['x64', 'arm64'] },
-      { target: 'zip', arch: ['x64', 'arm64'] },
-      { target: 'portable', arch: ['x64', 'arm64'] },
-    ],
+    // Keep one high-quality source. electron-builder converts PNG to a valid
+    // multi-size Windows ICO for the executable and NSIS installer.
+    icon: 'logo.png',
+    target: ['nsis', 'zip', 'portable'],
     artifactName: 'GuidePix-${arch}.${ext}',
     extraResources: [
       {
@@ -72,7 +70,7 @@ export default {
   },
 
   mac: {
-    icon: 'logo.icns',
+    icon: 'logo.png',
     target: [
       { target: 'dmg', arch: ['x64', 'arm64'] },
       { target: 'zip', arch: ['x64', 'arm64'] },
@@ -101,7 +99,7 @@ export default {
   },
 
   linux: {
-    icon: 'logo.icns',
+    icon: 'logo.png',
     maintainer: 'wjx-wp',
     category: 'Utility',
     target: [
