@@ -27,6 +27,7 @@ import { getAppBackgroundColor } from './helpers/index.js'
 
 import {
   contextMenuService,
+  documentationService,
   edgerService,
   handlesService,
   launchService,
@@ -59,6 +60,7 @@ const mainApp = createElectronApp({
 mainApp.use(sandboxPlugin)
 mainApp.use(mainModule)
 mainApp.use(lifecycleService)
+mainApp.use(documentationService)
 
 mainApp.use(themePlugin)
 mainApp.use(windowIPCPlugin)
