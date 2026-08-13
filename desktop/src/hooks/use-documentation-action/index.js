@@ -9,6 +9,10 @@ export function useDocumentationAction() {
 
   const loading = ref(false)
 
+  function getDeviceName(device) {
+    return device?.remark || device?.name || device?.model || device?.id || 'Android'
+  }
+
   async function getStatus(device) {
     if (!device?.id) {
       return null
@@ -23,6 +27,42 @@ export function useDocumentationAction() {
     return status
   }
 
+  async function ensureCaptureSession(device) {
+    if (!device?.id) {
+      return null
+    }
+
+    const config = preferenceStore.getDataWithFallback(device.id)
+    const session = await window.$preload.ipcRenderer.invoke(
+      'documentation-session-start',
+      {
+        deviceId: device.id,
+        deviceName: getDeviceName(device),
+        saveRoot: config?.savePath,
+      },
+    )
+
+    if (session) {
+      documentationStore.setStatus(device.id, { captureSession: session })
+    }
+
+    return session
+  }
+
+  async function getCaptureSession(device) {
+    if (!device?.id) {
+      return null
+    }
+
+    const session = await window.$preload.ipcRenderer.invoke(
+      'documentation-session-get',
+      device.id,
+    )
+
+    documentationStore.setStatus(device.id, { captureSession: session })
+    return session
+  }
+
   async function enter(device, { silent = false } = {}) {
     if (!device?.id) {
       return false
@@ -34,7 +74,11 @@ export function useDocumentationAction() {
         'documentation-demo-enter',
         device.id,
       )
-      documentationStore.setStatus(device.id, status || { active: true, tracked: true })
+      const session = await ensureCaptureSession(device)
+      documentationStore.setStatus(device.id, {
+        ...(status || { active: true, tracked: true }),
+        captureSession: session,
+      })
 
       if (!silent) {
         ElMessage.success('文档模式已开启')
@@ -63,7 +107,10 @@ export function useDocumentationAction() {
         device.id,
         { force },
       )
-      documentationStore.setStatus(device.id, status || { active: false, tracked: false })
+      documentationStore.setStatus(device.id, {
+        ...(status || { active: false, tracked: false }),
+        captureSession: null,
+      })
 
       if (!silent) {
         ElMessage.success('文档模式已恢复')
@@ -91,6 +138,7 @@ export function useDocumentationAction() {
   async function ensureDemo(device) {
     const status = await getStatus(device).catch(() => null)
     if (status?.active || status?.tracked) {
+      await getCaptureSession(device).catch(() => null)
       return status
     }
 
@@ -122,8 +170,11 @@ export function useDocumentationAction() {
         {
           saveRoot: config?.savePath,
           deviceId: device.id,
+          deviceName: getDeviceName(device),
         },
       )
+
+      documentationStore.setStatus(device.id, { captureSession: capture })
 
       await window.$preload.adb.screencap(device.id, {
         savePath: capture.originalPath,
@@ -159,7 +210,7 @@ export function useDocumentationAction() {
       annotationStore.open({
         ...capture,
         deviceId: device.id,
-        deviceName: device.remark || device.name || device.id,
+        deviceName: getDeviceName(device),
         imageDataUrl: `data:image/png;base64,${base64}`,
       })
 
@@ -171,15 +222,55 @@ export function useDocumentationAction() {
     }
   }
 
+  async function openProject(projectPath) {
+    loading.value = true
+    try {
+      const project = await window.$preload.ipcRenderer.invoke(
+        'documentation-open-project',
+        projectPath,
+      )
+
+      if (!project) {
+        return null
+      }
+
+      annotationStore.open(project)
+      return project
+    }
+    catch (error) {
+      ElMessage.warning(error?.message || String(error))
+      return false
+    }
+    finally {
+      loading.value = false
+    }
+  }
+
+  async function openSessionFolder(device) {
+    const session = await getCaptureSession(device).catch(() => null)
+    if (!session?.root) {
+      ElMessage.info('当前还没有文档会话目录')
+      return false
+    }
+
+    return window.$preload.ipcRenderer.invoke(
+      'documentation-reveal-path',
+      session.root,
+    )
+  }
+
   return {
     documentationStore,
     loading,
     getStatus,
+    getCaptureSession,
     enter,
     exit,
     toggle,
     captureOriginal,
     captureAndAnnotate,
+    openProject,
+    openSessionFolder,
   }
 }
 
