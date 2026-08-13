@@ -259,6 +259,13 @@ const stageRef = ref(null)
 
 const capture = computed(() => annotationStore.capture)
 
+const editor = reactive(useAnnotationEditor({
+  canvasRef,
+  stageRef,
+  capture,
+  onClose: () => annotationStore.close(),
+}))
+
 const dialogVisible = computed({
   get: () => annotationStore.visible,
   set: (value) => {
@@ -267,13 +274,6 @@ const dialogVisible = computed({
     }
   },
 })
-
-const editor = reactive(useAnnotationEditor({
-  canvasRef,
-  stageRef,
-  capture,
-  onClose: () => annotationStore.close(),
-}))
 
 watch(
   () => annotationStore.visible,
