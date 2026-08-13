@@ -9,7 +9,7 @@ import { getAdbPath } from '$electron/configs/which/index.js'
 const execFileAsync = promisify(execFile)
 const DEMO_SESSION_STORE_KEY = 'documentation.demoSessions'
 const CAPTURE_SESSION_STORE_KEY = 'documentation.captureSessions'
-const WORKSPACE_FOLDER = 'Documentation'
+const WORKSPACE_FOLDER = 'GuidePix'
 
 function getStoreMap(key) {
   const value = electronStore.get(key, {})
@@ -260,7 +260,7 @@ async function startCaptureSession(payload = {}) {
   }
 
   const sessionName = title
-    ? sanitizeSegment(title, 'Documentation')
+    ? sanitizeSegment(title, 'GuidePix')
     : sanitizeSegment(deviceName || deviceId, 'Android')
   const id = `${formatSessionTime()}_${sessionName}`
   const root = path.resolve(saveRoot, WORKSPACE_FOLDER, id)
@@ -369,7 +369,7 @@ async function openProject(projectPath) {
     const result = await dialog.showOpenDialog({
       properties: ['openFile'],
       filters: [
-        { name: 'Escrcpy Documentation Project', extensions: ['json'] },
+        { name: 'GuidePix Project', extensions: ['json'] },
       ],
     })
 
