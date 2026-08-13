@@ -7,6 +7,7 @@ on:
       - fix/documentation-ux-v1
       - fix/documentation-ux-handler-v2
       - fix/documentation-capture-v4
+      - fix/documentation-nativeimage-v5
   workflow_dispatch:
 
 permissions:
@@ -70,7 +71,7 @@ jobs:
       - name: Upload Windows x64 package
         uses: actions/upload-artifact@v6
         with:
-          name: Escrcpy-Docs-3.0.8-docs.4-Windows-x64
+          name: Escrcpy-Docs-3.0.8-docs.5-Windows-x64
           path: |
             desktop/dist-release/*x64.exe
             desktop/dist-release/*x64.zip
