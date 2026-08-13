@@ -1,4 +1,4 @@
-name: documentation-mode-ci
+name: guidepix-ci
 
 on:
   push:
@@ -8,6 +8,7 @@ on:
       - fix/documentation-ux-handler-v2
       - fix/documentation-capture-v4
       - fix/documentation-nativeimage-v5
+      - feature/documentation-workflow-v6
   pull_request:
     branches:
       - main
@@ -17,13 +18,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: documentation-mode-${{ github.ref }}
+  group: guidepix-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   verify:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -49,16 +50,19 @@ jobs:
           pnpm --filter @escrcpy/adbx build
           pnpm --filter @escrcpy/unocss-preset-shades build
 
-      - name: Lint documentation-mode changes
+      - name: Lint GuidePix changes
         shell: pwsh
         run: >-
           pnpm exec eslint
           desktop/electron/main.js
           desktop/electron/services/index.js
           desktop/electron/services/documentation/index.js
+          desktop/electron/services/documentation-workflow/index.js
           desktop/electron/services/documentation-ux-native/index.js
           desktop/electron/services/documentation-ux-phone/index.js
           desktop/src/App.vue
+          desktop/src/views/device/index.vue
+          desktop/src/components/documentation-workbench/index.vue
           desktop/src/components/annotation-editor/fabric-compat.js
           desktop/src/components/annotation-editor/index.vue
           desktop/src/components/annotation-editor/use-editor.js
@@ -68,15 +72,17 @@ jobs:
           desktop/src/components/control-bar/document-capture/index.vue
           desktop/src/components/control-bar/documentation/index.vue
           desktop/src/components/quick-bar/index.vue
-          desktop/src/components/quick-bar/components/documentation/index.vue
+          desktop/src/components/quick-bar/components/documentation-workbench/index.vue
           desktop/src/components/quick-bar/components/documentation-workspace/index.vue
           desktop/src/hooks/use-documentation-action/index.js
           desktop/src/hooks/use-screenshot-action/index.js
           desktop/src/store/annotation/index.js
           desktop/src/store/documentation/index.js
+          desktop/src/store/documentation-workflow/index.js
           desktop/vite.config.js
+          desktop/electron-builder.config.js
 
-      - name: Guard against sharp in Documentation main-process capture
+      - name: Guard capture path against sharp
         shell: pwsh
         run: |
           $files = @(
@@ -85,7 +91,7 @@ jobs:
           )
           $forbidden = Select-String -Path $files -Pattern "sharp" -SimpleMatch -Quiet
           if ($forbidden) {
-            throw 'Documentation capture must not reference sharp in the Electron main process.'
+            throw 'GuidePix capture must not reference sharp in the Electron main process.'
           }
 
       - name: Build desktop app
@@ -93,7 +99,7 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=4096
         run: pnpm --filter escrcpy build
 
-      - name: Assert Documentation runtime handlers are bundled
+      - name: Assert GuidePix runtime handlers are bundled
         shell: pwsh
         run: |
           $mainBundles = Get-ChildItem -Path 'desktop/dist-electron' -Filter 'main*.js' -File
@@ -103,24 +109,28 @@ jobs:
           foreach ($pattern in @(
             'documentation-workspace-get',
             'documentation-dnd-enter',
-            'documentation-workspace-choose',
             'documentation-capture-screen',
+            'documentation-workflow-get',
+            'documentation-workflow-create-variant',
+            'documentation-workflow-write-compose',
             'phone-screenshot-not-created'
           )) {
             $found = Select-String -Path $mainBundles.FullName -Pattern $pattern -SimpleMatch -Quiet
             if (-not $found) {
-              throw "Required Documentation runtime code is missing from generated Electron main chunks: $pattern"
+              throw "Required GuidePix runtime code is missing from generated Electron main chunks: $pattern"
             }
           }
 
-      - name: Assert Fabric top-left compatibility is bundled
+      - name: Assert GuidePix renderer features are bundled
         shell: pwsh
         run: |
           $rendererBundles = Get-ChildItem -Path 'desktop/dist/assets' -Filter '*.js' -File
           if (-not $rendererBundles) {
             throw 'Renderer bundles were not generated under desktop/dist/assets'
           }
-          $found = Select-String -Path $rendererBundles.FullName -Pattern "originX='left'" -SimpleMatch -Quiet
-          if (-not $found) {
-            Write-Host 'Minification may rewrite the assignment; source lint/build already validates the Fabric compatibility module.'
+          foreach ($pattern in @('GuidePix', 'CAPTURE FIRST', 'COMPOSE')) {
+            $found = Select-String -Path $rendererBundles.FullName -Pattern $pattern -SimpleMatch -Quiet
+            if (-not $found) {
+              throw "GuidePix renderer feature is missing from generated assets: $pattern"
+            }
           }
