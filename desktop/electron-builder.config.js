@@ -3,6 +3,11 @@ import { execSync } from 'node:child_process'
 const raw = execSync('npm config get electron_mirror').toString().trim()
 const mirror = (raw && raw !== 'undefined') ? raw : null
 
+const commonNotices = [
+  { from: '../LICENSE', to: 'LICENSE.txt' },
+  { from: '../THIRD_PARTY_NOTICES.md', to: 'THIRD_PARTY_NOTICES.md' },
+]
+
 /** @type {import('electron-builder').Configuration} */
 export default {
   productName: 'Escrcpy Docs',
@@ -35,11 +40,14 @@ export default {
       // { target: 'appx', arch: ['x64', 'arm64'] },
     ],
     artifactName: 'Escrcpy-Docs-${version}-win-${arch}.${ext}',
-    extraResources: {
-      from: 'electron/resources/extra',
-      to: 'extra',
-      filter: ['common', 'win', 'win-${arch}'],
-    },
+    extraResources: [
+      {
+        from: 'electron/resources/extra',
+        to: 'extra',
+        filter: ['common', 'win', 'win-${arch}'],
+      },
+      ...commonNotices,
+    ],
   },
 
   nsis: {
@@ -71,11 +79,14 @@ export default {
       { target: 'zip', arch: ['x64', 'arm64'] },
     ],
     artifactName: 'Escrcpy-Docs-${version}-mac-${arch}.${ext}',
-    extraResources: {
-      from: 'electron/resources/extra',
-      to: 'extra',
-      filter: ['common', 'mac', 'mac-${arch}'],
-    },
+    extraResources: [
+      {
+        from: 'electron/resources/extra',
+        to: 'extra',
+        filter: ['common', 'mac', 'mac-${arch}'],
+      },
+      ...commonNotices,
+    ],
     x64ArchFiles: 'Contents/Resources/extra/**/*',
     entitlementsInherit: 'entitlements.mac.plist',
     extendInfo: {
@@ -100,11 +111,14 @@ export default {
       // { target: 'flatpak', arch: ['x64', 'arm64'] },
     ],
     artifactName: 'Escrcpy-Docs-${version}-linux-${arch}.${ext}',
-    extraResources: {
-      from: 'electron/resources/extra',
-      to: 'extra',
-      filter: ['common', 'linux', 'linux-${arch}'],
-    },
+    extraResources: [
+      {
+        from: 'electron/resources/extra',
+        to: 'extra',
+        filter: ['common', 'linux', 'linux-${arch}'],
+      },
+      ...commonNotices,
+    ],
   },
 
   flatpak: {
