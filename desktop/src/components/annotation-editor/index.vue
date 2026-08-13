@@ -52,6 +52,14 @@
           <i class="i-bi-folder2-open mr-1"></i>
           目录
         </el-button>
+        <el-button
+          text
+          title="设置以后 F8 文档截图的保存目录"
+          @click="chooseCaptureWorkspace"
+        >
+          <i class="i-bi-folder-symlink mr-1"></i>
+          设置目录
+        </el-button>
         <el-button :disabled="!editor.ready" @click="editor.saveProject()">
           保存工程
         </el-button>
@@ -186,6 +194,21 @@
 
           <div class="flex-1 min-w-2"></div>
 
+          <el-button-group class="flex-none">
+            <el-button title="完整适应窗口" @click="fitView">
+              适应
+            </el-button>
+            <el-button title="缩小视图" @click="zoomOut">
+              <i class="i-bi-dash-lg"></i>
+            </el-button>
+            <el-button class="!min-w-16" title="当前视图缩放" @click="fitView">
+              {{ Math.round(viewZoom * 100) }}%
+            </el-button>
+            <el-button title="放大视图" @click="zoomIn">
+              <i class="i-bi-plus-lg"></i>
+            </el-button>
+          </el-button-group>
+
           <el-button
             :disabled="!editor.canUndo"
             title="撤销 Ctrl+Z"
@@ -215,7 +238,10 @@
         class="flex-1 min-h-0 overflow-auto p-4 documentation-canvas-stage"
       >
         <div class="min-h-full min-w-full flex items-center justify-center">
-          <div class="documentation-canvas-shell shadow-xl">
+          <div
+            class="documentation-canvas-shell shadow-xl"
+            :style="{ zoom: viewZoom }"
+          >
             <canvas ref="canvasRef"></canvas>
           </div>
         </div>
@@ -239,7 +265,7 @@
           吸附：{{ editor.hoverRegionText }}
         </span>
         <span v-else>
-          {{ editor.sourceWidth }} × {{ editor.sourceHeight }} · 选择对象后可移动 / 缩放 / 旋转
+          {{ editor.sourceWidth }} × {{ editor.sourceHeight }} · 视图 {{ Math.round(viewZoom * 100) }}% · 选择对象后可移动 / 缩放 / 旋转
         </span>
         <span class="ml-auto">F8 截原图</span>
         <span>Shift+F8 截图并标注</span>
@@ -256,7 +282,9 @@ import { useAnnotationEditor } from './use-editor.js'
 const annotationStore = useAnnotationStore()
 const canvasRef = ref(null)
 const stageRef = ref(null)
+const viewZoom = ref(1.25)
 
+const { chooseWorkspaceRoot } = useDocumentationAction()
 const capture = computed(() => annotationStore.capture)
 
 const editor = reactive(useAnnotationEditor({
@@ -281,10 +309,30 @@ watch(
     if (!visible) {
       return
     }
+    viewZoom.value = 1.25
     await nextTick()
     await editor.init()
   },
 )
+
+function fitView() {
+  viewZoom.value = 1
+}
+
+function zoomIn() {
+  viewZoom.value = Math.min(3, Math.round((viewZoom.value + 0.25) * 100) / 100)
+}
+
+function zoomOut() {
+  viewZoom.value = Math.max(0.75, Math.round((viewZoom.value - 0.25) * 100) / 100)
+}
+
+async function chooseCaptureWorkspace() {
+  await chooseWorkspaceRoot({
+    id: capture.value?.deviceId,
+    name: capture.value?.deviceName,
+  })
+}
 </script>
 
 <style lang="postcss">
@@ -322,5 +370,6 @@ watch(
 .documentation-canvas-shell {
   @apply bg-white flex-none;
   line-height: 0;
+  transform-origin: center center;
 }
 </style>

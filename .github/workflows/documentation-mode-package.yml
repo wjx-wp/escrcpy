@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/documentation-mode
+      - fix/documentation-ux-v1
   workflow_dispatch:
 
 permissions:
@@ -15,6 +16,7 @@ concurrency:
 
 jobs:
   windows-x64:
+    # Release-candidate packaging for the documentation workflow.
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
@@ -67,7 +69,7 @@ jobs:
       - name: Upload Windows x64 package
         uses: actions/upload-artifact@v6
         with:
-          name: Escrcpy-Docs-3.0.8-docs.1-Windows-x64
+          name: Escrcpy-Docs-3.0.8-docs.2-Windows-x64
           path: |
             desktop/dist-release/*x64.exe
             desktop/dist-release/*x64.zip
