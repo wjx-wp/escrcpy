@@ -31,7 +31,7 @@ export function useScreenshotAction({ floating } = {}) {
     const fileName = `${deviceStore.getLabel(
       device,
       'screenshot',
-    )}.jpg`
+    )}.png`
 
     const deviceConfig = preferenceStore.getDataWithFallback(device.id)
     const savePath = window.$preload.path.resolve(deviceConfig.savePath, fileName)
