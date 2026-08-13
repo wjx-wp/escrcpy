@@ -1,26 +1,22 @@
-name: documentation-mode-package
+name: guidepix-package
 
 on:
   push:
     branches:
-      - feature/documentation-mode
-      - fix/documentation-ux-v1
-      - fix/documentation-ux-handler-v2
-      - fix/documentation-capture-v4
-      - fix/documentation-nativeimage-v5
+      - feature/documentation-workflow-v6
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: documentation-mode-package-${{ github.ref }}
+  group: guidepix-package-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   windows-x64:
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 50
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -59,22 +55,29 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=4096
         run: pnpm --filter escrcpy build
 
-      - name: Package Windows x64
+      - name: Package GuidePix Windows x64
         env:
           NODE_OPTIONS: --max-old-space-size=4096
         run: pnpm --filter escrcpy build:electron -- --win --x64
 
-      - name: List release files
+      - name: Verify release names
         shell: pwsh
-        run: Get-ChildItem -Path desktop/dist-release -File | Select-Object Name, Length
+        run: |
+          Get-ChildItem -Path desktop/dist-release -File | Select-Object Name, Length
+          foreach ($name in @('GuidePix-Portable-x64.exe', 'GuidePix-Setup-x64.exe', 'GuidePix-x64.zip')) {
+            if (-not (Test-Path (Join-Path 'desktop/dist-release' $name))) {
+              throw "Missing GuidePix release artifact: $name"
+            }
+          }
 
-      - name: Upload Windows x64 package
+      - name: Upload GuidePix Windows x64
         uses: actions/upload-artifact@v6
         with:
-          name: Escrcpy-Docs-3.0.8-docs.5-Windows-x64
+          name: GuidePix-1.0.0-Windows-x64
           path: |
-            desktop/dist-release/*x64.exe
-            desktop/dist-release/*x64.zip
+            desktop/dist-release/GuidePix-Portable-x64.exe
+            desktop/dist-release/GuidePix-Setup-x64.exe
+            desktop/dist-release/GuidePix-x64.zip
             desktop/dist-release/*x64.exe.blockmap
             desktop/dist-release/latest*.yml
           if-no-files-found: error
