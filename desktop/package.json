@@ -65,6 +65,7 @@
     "electron-updater": "6.3.9",
     "element-plus": "2.13.1",
     "enum-plus": "3.1.6",
+    "fabric": "7.4.0",
     "fit-dimensions": "1.0.0",
     "fix-path": "5.0.0",
     "fs-extra": "11.2.0",
