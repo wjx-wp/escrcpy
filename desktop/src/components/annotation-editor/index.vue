@@ -765,12 +765,16 @@ onBeforeUnmount(disposeCanvas)
 
 .documentation-canvas-stage {
   background-image:
-    linear-gradient(45deg, rgba(148, 163, 184, 0.10) 25%, transparent 25%),
-    linear-gradient(-45deg, rgba(148, 163, 184, 0.10) 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, rgba(148, 163, 184, 0.10) 75%),
-    linear-gradient(-45deg, transparent 75%, rgba(148, 163, 184, 0.10) 75%);
+    linear-gradient(45deg, rgba(148, 163, 184, 0.1) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(148, 163, 184, 0.1) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(148, 163, 184, 0.1) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(148, 163, 184, 0.1) 75%);
   background-size: 24px 24px;
-  background-position: 0 0, 0 12px, 12px -12px, -12px 0px;
+  background-position:
+    0 0,
+    0 12px,
+    12px -12px,
+    -12px 0;
 }
 
 .documentation-canvas-shell {
