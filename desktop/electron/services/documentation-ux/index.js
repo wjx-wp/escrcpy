@@ -1,6 +1,9 @@
+import fs from 'node:fs'
+import path from 'node:path'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { app, dialog, shell as electronShell, ipcMain } from 'electron'
+import sharp from 'sharp'
 import electronStore from '$electron/helpers/store/index.js'
 import { getAdbPath } from '$electron/configs/which/index.js'
 
@@ -8,6 +11,10 @@ const execFileAsync = promisify(execFile)
 const DND_SESSION_STORE_KEY = 'documentation.dndSessions'
 const WORKSPACE_ROOT_STORE_KEY = 'documentation.workspaceRoot'
 const CAPTURE_SESSION_STORE_KEY = 'documentation.captureSessions'
+const SECURE_SCREENSHOT_DIRS = [
+  '/sdcard/DCIM/Screenshots',
+  '/sdcard/Pictures/Screenshots',
+]
 
 function getMap(key) {
   const value = electronStore.get(key, {})
@@ -18,27 +25,52 @@ function setMap(key, value) {
   electronStore.set(key, value)
 }
 
-async function runAdb(deviceId, args = []) {
+function getAdbExecutable() {
   const adbPath = getAdbPath() || getAdbPath({ onlyDefault: true })
   if (!adbPath) {
     throw new Error('ADB executable was not found')
   }
+  return adbPath
+}
 
+async function runAdb(deviceId, args = []) {
   const { stdout = '' } = await execFileAsync(
-    adbPath,
+    getAdbExecutable(),
     ['-s', deviceId, ...args],
     {
       encoding: 'utf8',
       windowsHide: true,
-      maxBuffer: 4 * 1024 * 1024,
+      maxBuffer: 8 * 1024 * 1024,
     },
   )
 
   return stdout.trim()
 }
 
+async function runAdbBuffer(deviceId, args = []) {
+  const { stdout = Buffer.alloc(0) } = await execFileAsync(
+    getAdbExecutable(),
+    ['-s', deviceId, ...args],
+    {
+      encoding: null,
+      windowsHide: true,
+      maxBuffer: 32 * 1024 * 1024,
+    },
+  )
+
+  return Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout)
+}
+
 function runShell(deviceId, args = []) {
   return runAdb(deviceId, ['shell', ...args])
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function shellQuote(value) {
+  return `'${String(value).replace(/'/g, `'\\''`)}'`
 }
 
 async function getZenMode(deviceId) {
@@ -206,6 +238,189 @@ async function openWorkspaceRoot(fallback) {
   return root
 }
 
+async function looksLikeSecureBlack(filePath) {
+  try {
+    const { data, info } = await sharp(filePath)
+      .resize({ width: 48, height: 96, fit: 'fill' })
+      .removeAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+
+    const channels = info.channels || 3
+    let inspected = 0
+    let dark = 0
+
+    // Ignore top/bottom system bars and inspect the content-heavy center area.
+    const startRow = Math.floor(info.height * 0.12)
+    const endRow = Math.ceil(info.height * 0.88)
+
+    for (let y = startRow; y < endRow; y += 1) {
+      for (let x = 0; x < info.width; x += 1) {
+        const offset = (y * info.width + x) * channels
+        const r = data[offset]
+        const g = data[offset + 1]
+        const b = data[offset + 2]
+        inspected += 1
+        if (Math.max(r, g, b) <= 12) {
+          dark += 1
+        }
+      }
+    }
+
+    return inspected > 0 && dark / inspected >= 0.965
+  }
+  catch (error) {
+    console.warn('[documentation] Failed to inspect screenshot darkness:', error?.message || error)
+    return false
+  }
+}
+
+async function getSystemScreenshotCandidates(deviceId) {
+  const dirs = SECURE_SCREENSHOT_DIRS.map(shellQuote).join(' ')
+  const command = [
+    `for d in ${dirs}; do`,
+    'if [ -d "$d" ]; then',
+    'ls -1t "$d"/*.png "$d"/*.jpg "$d"/*.jpeg 2>/dev/null | head -n 1',
+    'fi',
+    'done',
+  ].join(' ')
+
+  const output = await runShell(deviceId, ['sh', '-c', command]).catch(() => '')
+  return String(output || '')
+    .split(/\r?\n/)
+    .map(item => item.trim())
+    .filter(Boolean)
+}
+
+async function waitForNewSystemScreenshot(deviceId, before) {
+  const previous = new Set(before)
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await sleep(250)
+    const current = await getSystemScreenshotCandidates(deviceId)
+    const fresh = current.find(item => !previous.has(item))
+    if (fresh) {
+      return fresh
+    }
+  }
+
+  return null
+}
+
+async function hasRoot(deviceId) {
+  const output = await runShell(deviceId, ['su', '-c', 'id']).catch(() => '')
+  return /uid=0\b/.test(output)
+}
+
+async function hasEnableScreenshotModule(deviceId) {
+  const output = await runShell(deviceId, [
+    'pm',
+    'path',
+    'io.github.lsposed.disableflagsecure',
+  ]).catch(() => '')
+  return output.includes('package:')
+}
+
+async function captureViaSystemUi(deviceId, savePath, { cleanupDeviceCopy = true } = {}) {
+  const before = await getSystemScreenshotCandidates(deviceId)
+
+  // KEYCODE_SYSRQ (120) asks Android/SystemUI to take a normal system screenshot.
+  // On rooted devices with the LSPosed Enable Screenshot module, this path can
+  // include secure layers that raw shell screencap blacks out.
+  await runShell(deviceId, ['input', 'keyevent', '120'])
+  const remotePath = await waitForNewSystemScreenshot(deviceId, before)
+
+  if (!remotePath) {
+    return { success: false, reason: 'system-screenshot-not-created' }
+  }
+
+  const buffer = await runAdbBuffer(deviceId, [
+    'exec-out',
+    'sh',
+    '-c',
+    `cat ${shellQuote(remotePath)}`,
+  ])
+
+  await fs.promises.mkdir(path.dirname(savePath), { recursive: true })
+  await fs.promises.writeFile(savePath, buffer)
+
+  if (cleanupDeviceCopy) {
+    await runShell(deviceId, [
+      'sh',
+      '-c',
+      `rm -f ${shellQuote(remotePath)}`,
+    ]).catch(() => {})
+  }
+
+  return {
+    success: true,
+    remotePath,
+    black: await looksLikeSecureBlack(savePath),
+  }
+}
+
+async function captureDocumentationScreen(payload = {}) {
+  const {
+    deviceId,
+    savePath,
+    secureFallback = true,
+    cleanupDeviceCopy = true,
+  } = payload
+
+  if (!deviceId || !savePath) {
+    throw new Error('Device id and save path are required')
+  }
+
+  await fs.promises.mkdir(path.dirname(savePath), { recursive: true })
+
+  const raw = await runAdbBuffer(deviceId, ['exec-out', 'screencap', '-p'])
+  await fs.promises.writeFile(savePath, raw)
+
+  const secureBlack = await looksLikeSecureBlack(savePath)
+  if (!secureBlack || !secureFallback) {
+    return {
+      savePath,
+      backend: 'adb',
+      secureBlack,
+      fallbackAttempted: false,
+    }
+  }
+
+  const [rootAvailable, enableScreenshotModule] = await Promise.all([
+    hasRoot(deviceId),
+    hasEnableScreenshotModule(deviceId),
+  ])
+
+  const fallback = await captureViaSystemUi(deviceId, savePath, {
+    cleanupDeviceCopy,
+  }).catch((error) => ({
+    success: false,
+    reason: error?.message || String(error),
+  }))
+
+  if (fallback.success && !fallback.black) {
+    return {
+      savePath,
+      backend: 'systemui',
+      secureBlack: false,
+      fallbackAttempted: true,
+      rootAvailable,
+      enableScreenshotModule,
+      remotePath: fallback.remotePath,
+    }
+  }
+
+  return {
+    savePath,
+    backend: 'adb',
+    secureBlack: true,
+    fallbackAttempted: true,
+    fallbackReason: fallback.reason || (fallback.black ? 'system-screenshot-still-black' : 'unknown'),
+    rootAvailable,
+    enableScreenshotModule,
+  }
+}
+
 export default {
   name: 'service:documentation-ux',
   deps: ['module:main'],
@@ -218,6 +433,7 @@ export default {
     ipcMain.handle('documentation-workspace-choose', (_, fallback) => chooseWorkspaceRoot(fallback))
     ipcMain.handle('documentation-workspace-reset', () => resetWorkspaceRoot())
     ipcMain.handle('documentation-workspace-open', (_, fallback) => openWorkspaceRoot(fallback))
+    ipcMain.handle('documentation-capture-screen', (_, payload) => captureDocumentationScreen(payload))
 
     const recoverPending = () => {
       restoreAllDndSessions().then((results) => {
@@ -244,6 +460,7 @@ export default {
       ipcMain.removeHandler('documentation-workspace-choose')
       ipcMain.removeHandler('documentation-workspace-reset')
       ipcMain.removeHandler('documentation-workspace-open')
+      ipcMain.removeHandler('documentation-capture-screen')
     }
   },
 }
