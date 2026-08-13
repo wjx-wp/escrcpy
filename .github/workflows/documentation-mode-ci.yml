@@ -57,6 +57,7 @@ jobs:
           desktop/electron/services/index.js
           desktop/electron/services/documentation/index.js
           desktop/electron/services/documentation-ux-native/index.js
+          desktop/electron/services/documentation-ux-phone/index.js
           desktop/src/App.vue
           desktop/src/components/annotation-editor/fabric-compat.js
           desktop/src/components/annotation-editor/index.vue
@@ -78,9 +79,13 @@ jobs:
       - name: Guard against sharp in Documentation main-process capture
         shell: pwsh
         run: |
-          $source = Get-Content 'desktop/electron/services/documentation-ux-native/index.js' -Raw
-          if ($source -match "from ['\"]sharp['\"]" -or $source -match "require\(['\"]sharp['\"]\)") {
-            throw 'Documentation capture must not import sharp in the Electron main process.'
+          $files = @(
+            'desktop/electron/services/documentation-ux-native/index.js',
+            'desktop/electron/services/documentation-ux-phone/index.js'
+          )
+          $forbidden = Select-String -Path $files -Pattern "sharp" -SimpleMatch -Quiet
+          if ($forbidden) {
+            throw 'Documentation capture must not reference sharp in the Electron main process.'
           }
 
       - name: Build desktop app
