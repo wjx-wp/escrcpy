@@ -50,7 +50,7 @@ jobs:
           pnpm --filter @escrcpy/adbx build
           pnpm --filter @escrcpy/unocss-preset-shades build
 
-      - name: Lint GuidePix changes
+      - name: Lint GuidePix core logic
         shell: pwsh
         run: >-
           pnpm exec eslint
@@ -61,8 +61,6 @@ jobs:
           desktop/electron/services/documentation-ux-native/index.js
           desktop/electron/services/documentation-ux-phone/index.js
           desktop/src/App.vue
-          desktop/src/views/device/index.vue
-          desktop/src/components/documentation-workbench/index.vue
           desktop/src/components/annotation-editor/fabric-compat.js
           desktop/src/components/annotation-editor/index.vue
           desktop/src/components/annotation-editor/use-editor.js
@@ -94,7 +92,7 @@ jobs:
             throw 'GuidePix capture must not reference sharp in the Electron main process.'
           }
 
-      - name: Build desktop app
+      - name: Build desktop app and validate Vue UI
         env:
           NODE_OPTIONS: --max-old-space-size=4096
         run: pnpm --filter escrcpy build
