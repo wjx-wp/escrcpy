@@ -35,6 +35,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Build workspace dependencies
+        shell: pwsh
+        run: |
+          pnpm --filter @escrcpy/shared build
+          pnpm --filter @escrcpy/adbx build
+          pnpm --filter @escrcpy/unocss-preset-shades build
+
       - name: Lint documentation-mode changes
         shell: pwsh
         run: >-
