@@ -64,8 +64,6 @@ export default function (args) {
                 return 'element-plus'
               if (id.includes('fabric'))
                 return 'fabric'
-              if (id.includes('tesseract.js'))
-                return 'tesseract'
               if (id.includes('@tdesign'))
                 return 'tdesign'
               if (id.includes('konva') || id.includes('vue-konva'))
