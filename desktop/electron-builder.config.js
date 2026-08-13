@@ -10,8 +10,8 @@ const commonNotices = [
 
 /** @type {import('electron-builder').Configuration} */
 export default {
-  productName: 'Escrcpy Docs',
-  appId: 'io.github.wjx-wp.escrcpy.docs',
+  productName: 'GuidePix',
+  appId: 'io.github.wjx-wp.guidepix',
 
   directories: {
     output: 'dist-release',
@@ -37,9 +37,8 @@ export default {
       { target: 'nsis', arch: ['x64', 'arm64'] },
       { target: 'zip', arch: ['x64', 'arm64'] },
       { target: 'portable', arch: ['x64', 'arm64'] },
-      // { target: 'appx', arch: ['x64', 'arm64'] },
     ],
-    artifactName: 'Escrcpy-Docs-${version}-win-${arch}.${ext}',
+    artifactName: 'GuidePix-${arch}.${ext}',
     extraResources: [
       {
         from: 'electron/resources/extra',
@@ -51,9 +50,9 @@ export default {
   },
 
   nsis: {
-    artifactName: 'Escrcpy-Docs-${version}-win-setup-${arch}.${ext}',
-    shortcutName: '${productName}',
-    uninstallDisplayName: '${productName}',
+    artifactName: 'GuidePix-Setup-${arch}.${ext}',
+    shortcutName: 'GuidePix',
+    uninstallDisplayName: 'GuidePix',
     oneClick: false,
     perMachine: false,
     allowToChangeInstallationDirectory: true,
@@ -61,12 +60,12 @@ export default {
   },
 
   portable: {
-    artifactName: 'Escrcpy-Docs-${version}-win-portable-${arch}.${ext}',
+    artifactName: 'GuidePix-Portable-${arch}.${ext}',
     requestExecutionLevel: 'user',
   },
 
   appx: {
-    identityName: 'wjxwp.EscrcpyDocs',
+    identityName: 'wjxwp.GuidePix',
     publisher: 'CN=E67CC10B-A1BE-413C-BC3B-6E1137E0742D',
     publisherDisplayName: 'wjx-wp',
     languages: ['zh-CN', 'en-US', 'zh-TW'],
@@ -78,7 +77,7 @@ export default {
       { target: 'dmg', arch: ['x64', 'arm64'] },
       { target: 'zip', arch: ['x64', 'arm64'] },
     ],
-    artifactName: 'Escrcpy-Docs-${version}-mac-${arch}.${ext}',
+    artifactName: 'GuidePix-${arch}.${ext}',
     extraResources: [
       {
         from: 'electron/resources/extra',
@@ -91,9 +90,9 @@ export default {
     entitlementsInherit: 'entitlements.mac.plist',
     extendInfo: {
       NSDocumentsFolderUsageDescription:
-        'Application requests access to the user\'s Documents folder.',
+        'GuidePix requests access to the Documents folder for guide projects.',
       NSDownloadsFolderUsageDescription:
-        'Application requests access to the user\'s Downloads folder.',
+        'GuidePix requests access to the Downloads folder for exported guide images.',
     },
     type: 'development',
     notarize: false,
@@ -108,9 +107,8 @@ export default {
     target: [
       { target: 'AppImage', arch: ['x64', 'arm64'] },
       { target: 'deb', arch: ['x64', 'arm64'] },
-      // { target: 'flatpak', arch: ['x64', 'arm64'] },
     ],
-    artifactName: 'Escrcpy-Docs-${version}-linux-${arch}.${ext}',
+    artifactName: 'GuidePix-${arch}.${ext}',
     extraResources: [
       {
         from: 'electron/resources/extra',
@@ -148,7 +146,7 @@ export default {
     provider: 'github',
     owner: 'wjx-wp',
     repo: 'escrcpy',
-    updaterCacheDirName: 'escrcpy-docs-updater',
+    updaterCacheDirName: 'guidepix-updater',
   },
 
   electronDownload: {
