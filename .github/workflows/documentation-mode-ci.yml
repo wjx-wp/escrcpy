@@ -80,12 +80,13 @@ jobs:
       - name: Assert Documentation UX IPC handlers are bundled
         shell: pwsh
         run: |
-          $mainBundle = 'desktop/dist-electron/main.js'
-          if (-not (Test-Path $mainBundle)) {
-            throw "Electron main bundle was not generated: $mainBundle"
+          $mainBundles = Get-ChildItem -Path 'desktop/dist-electron' -Filter 'main*.js' -File
+          if (-not $mainBundles) {
+            throw 'Electron main bundles were not generated under desktop/dist-electron'
           }
           foreach ($pattern in @('documentation-workspace-get', 'documentation-dnd-enter', 'documentation-workspace-choose')) {
-            if (-not (Select-String -Path $mainBundle -Pattern $pattern -SimpleMatch -Quiet)) {
-              throw "Required Documentation UX IPC handler is missing from the Electron main bundle: $pattern"
+            $found = Select-String -Path $mainBundles.FullName -Pattern $pattern -SimpleMatch -Quiet
+            if (-not $found) {
+              throw "Required Documentation UX IPC handler is missing from generated Electron main chunks: $pattern"
             }
           }
