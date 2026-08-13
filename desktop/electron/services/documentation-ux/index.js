@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { app, dialog, ipcMain, shell as electronShell } from 'electron'
+import { app, dialog, shell as electronShell, ipcMain } from 'electron'
 import electronStore from '$electron/helpers/store/index.js'
 import { getAdbPath } from '$electron/configs/which/index.js'
 
