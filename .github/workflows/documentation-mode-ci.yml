@@ -5,6 +5,7 @@ on:
     branches:
       - feature/documentation-mode
       - fix/documentation-ux-v1
+      - fix/documentation-ux-handler-v2
   pull_request:
     branches:
       - main
@@ -75,3 +76,17 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=4096
         run: pnpm --filter escrcpy build
+
+      - name: Assert Documentation UX IPC handlers are bundled
+        shell: pwsh
+        run: |
+          $mainBundles = Get-ChildItem -Path 'desktop/dist-electron' -Filter 'main*.js' -File
+          if (-not $mainBundles) {
+            throw 'Electron main bundles were not generated under desktop/dist-electron'
+          }
+          foreach ($pattern in @('documentation-workspace-get', 'documentation-dnd-enter', 'documentation-workspace-choose')) {
+            $found = Select-String -Path $mainBundles.FullName -Pattern $pattern -SimpleMatch -Quiet
+            if (-not $found) {
+              throw "Required Documentation UX IPC handler is missing from generated Electron main chunks: $pattern"
+            }
+          }

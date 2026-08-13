@@ -22,35 +22,64 @@ export function useDocumentationAction() {
   }
 
   async function getWorkspaceRoot(device) {
-    return window.$preload.ipcRenderer.invoke(
-      'documentation-workspace-get',
-      getFallbackSaveRoot(device),
-    )
+    const fallback = getFallbackSaveRoot(device)
+
+    try {
+      return await window.$preload.ipcRenderer.invoke(
+        'documentation-workspace-get',
+        fallback,
+      )
+    }
+    catch (error) {
+      console.warn('[documentation] Workspace service unavailable, using fallback path:', error)
+      return fallback
+    }
   }
 
   async function chooseWorkspaceRoot(device) {
-    const root = await window.$preload.ipcRenderer.invoke(
-      'documentation-workspace-choose',
-      getFallbackSaveRoot(device),
-    )
+    try {
+      const root = await window.$preload.ipcRenderer.invoke(
+        'documentation-workspace-choose',
+        getFallbackSaveRoot(device),
+      )
 
-    if (!root) {
+      if (!root) {
+        return null
+      }
+
+      if (device?.id) {
+        documentationStore.setStatus(device.id, { captureSession: null })
+      }
+
+      ElMessage.success(`文档工作目录已设置：${root}`)
+      return root
+    }
+    catch (error) {
+      console.warn('[documentation] Failed to choose workspace root:', error)
+      ElMessage.warning('文档目录设置暂不可用，截图仍会保存到默认目录')
       return null
     }
-
-    if (device?.id) {
-      documentationStore.setStatus(device.id, { captureSession: null })
-    }
-
-    ElMessage.success(`文档工作目录已设置：${root}`)
-    return root
   }
 
   async function openWorkspaceRoot(device) {
-    return window.$preload.ipcRenderer.invoke(
-      'documentation-workspace-open',
-      getFallbackSaveRoot(device),
-    )
+    const fallback = getFallbackSaveRoot(device)
+
+    try {
+      return await window.$preload.ipcRenderer.invoke(
+        'documentation-workspace-open',
+        fallback,
+      )
+    }
+    catch (error) {
+      console.warn('[documentation] Workspace open helper unavailable:', error)
+      if (!fallback) {
+        return false
+      }
+      return window.$preload.ipcRenderer.invoke(
+        'documentation-reveal-path',
+        fallback,
+      ).catch(() => false)
+    }
   }
 
   async function getStatus(device) {
@@ -120,10 +149,25 @@ export function useDocumentationAction() {
 
     loading.value = true
     try {
-      const status = await window.$preload.ipcRenderer.invoke(
-        'documentation-demo-enter',
-        device.id,
-      )
+      let status
+      try {
+        status = await window.$preload.ipcRenderer.invoke(
+          'documentation-demo-enter',
+          device.id,
+        )
+      }
+      catch (error) {
+        ElMessage.warning(error?.message || String(error))
+        return false
+      }
+
+      // Demo Mode is the core state. Record it immediately so optional helpers
+      // cannot leave the UI in a false "not in documentation mode" state.
+      documentationStore.setStatus(device.id, {
+        ...(status || { active: true, tracked: true }),
+        captureSession: null,
+      })
+
       const dnd = await window.$preload.ipcRenderer.invoke(
         'documentation-dnd-enter',
         device.id,
@@ -131,31 +175,29 @@ export function useDocumentationAction() {
         console.warn('[documentation] Failed to enter DND:', error)
         return null
       })
-      const session = await ensureCaptureSession(device)
 
-      documentationStore.setStatus(device.id, {
+      const session = await ensureCaptureSession(device).catch((error) => {
+        console.warn('[documentation] Failed to pre-create capture session:', error)
+        return null
+      })
+
+      const merged = {
         ...(status || { active: true, tracked: true }),
         dnd,
         captureSession: session,
-      })
+      }
+      documentationStore.setStatus(device.id, merged)
 
       if (!silent) {
         if (dnd?.active) {
           ElMessage.success('文档模式已开启 · 勿扰已开启')
         }
         else {
-          ElMessage.warning('文档模式已开启，但勿扰模式没有确认成功')
+          ElMessage.success('文档模式已开启')
         }
       }
 
-      return {
-        ...(status || {}),
-        dnd,
-      }
-    }
-    catch (error) {
-      ElMessage.warning(error?.message || String(error))
-      return false
+      return merged
     }
     finally {
       loading.value = false

@@ -28,6 +28,7 @@ import { getAppBackgroundColor } from './helpers/index.js'
 import {
   contextMenuService,
   documentationService,
+  documentationUxService,
   edgerService,
   handlesService,
   launchService,
@@ -61,6 +62,7 @@ mainApp.use(sandboxPlugin)
 mainApp.use(mainModule)
 mainApp.use(lifecycleService)
 mainApp.use(documentationService)
+mainApp.use(documentationUxService)
 
 mainApp.use(themePlugin)
 mainApp.use(windowIPCPlugin)
