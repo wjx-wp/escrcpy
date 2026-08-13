@@ -62,6 +62,8 @@ export default function (args) {
                 return undefined
               if (id.includes('element-plus') || id.includes('@element-plus'))
                 return 'element-plus'
+              if (id.includes('fabric'))
+                return 'fabric'
               if (id.includes('@tdesign'))
                 return 'tdesign'
               if (id.includes('konva') || id.includes('vue-konva'))
