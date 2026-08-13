@@ -1,0 +1,40 @@
+name: documentation-mode-ci
+
+on:
+  push:
+    branches:
+      - feature/documentation-mode
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Enable corepack and pnpm
+        shell: pwsh
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.29.2 --activate
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Build desktop app
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: pnpm --filter escrcpy build
