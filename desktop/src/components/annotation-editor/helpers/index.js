@@ -23,12 +23,20 @@ export function parseAndroidBounds(value = '') {
   }
 }
 
+export function extractUiHierarchyXml(value = '') {
+  const match = String(value).match(/(<hierarchy[\s\S]*?<\/hierarchy>)/i)
+  return match ? match[1] : String(value)
+}
+
 export function parseUiHierarchy(xml = '', { width, height } = {}) {
   if (!xml || typeof DOMParser === 'undefined') {
     return []
   }
 
-  const document = new DOMParser().parseFromString(xml, 'text/xml')
+  const document = new DOMParser().parseFromString(
+    extractUiHierarchyXml(xml),
+    'text/xml',
+  )
   const nodes = Array.from(document.querySelectorAll('node'))
   const regions = []
   const seen = new Set()
