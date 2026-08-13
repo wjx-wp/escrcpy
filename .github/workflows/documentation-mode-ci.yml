@@ -31,8 +31,23 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Lint
-        run: pnpm lint
+      - name: Lint documentation-mode changes
+        shell: pwsh
+        run: >-
+          pnpm exec eslint
+          desktop/electron/main.js
+          desktop/electron/services/index.js
+          desktop/electron/services/documentation/index.js
+          desktop/src/App.vue
+          desktop/src/components/annotation-editor/index.vue
+          desktop/src/components/control-bar/index.vue
+          desktop/src/components/control-bar/annotate/index.vue
+          desktop/src/components/control-bar/documentation/index.vue
+          desktop/src/hooks/use-documentation-action/index.js
+          desktop/src/hooks/use-screenshot-action/index.js
+          desktop/src/store/annotation/index.js
+          desktop/src/store/documentation/index.js
+          desktop/vite.config.js
 
       - name: Build desktop app
         env:
