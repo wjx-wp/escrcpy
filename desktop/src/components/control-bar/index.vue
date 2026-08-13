@@ -94,6 +94,7 @@
 <script>
 import { controlBarHeight } from '$control/configs/index.js'
 import Annotate from './annotate/index.vue'
+import DocumentCapture from './document-capture/index.vue'
 import Documentation from './documentation/index.vue'
 import Install from './install/index.vue'
 import Launch from './launch/index.vue'
@@ -107,6 +108,7 @@ import Volume from './volume/index.vue'
 export default {
   components: {
     Annotate,
+    DocumentCapture,
     Documentation,
     Screenshot,
     Install,
@@ -212,6 +214,12 @@ export default {
           title: '文档模式：清理状态栏并在退出 Escrcpy 时自动恢复',
           fontIcon: 'i-bi-journal-check',
           component: 'Documentation',
+        },
+        documentCapture: {
+          label: 'Documentation Capture',
+          title: '文档原图截图（F8）',
+          fontIcon: 'i-bi-camera-fill',
+          component: 'DocumentCapture',
         },
         annotate: {
           label: 'Annotate Screenshot',
