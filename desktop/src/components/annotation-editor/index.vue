@@ -268,12 +268,12 @@ const dialogVisible = computed({
   },
 })
 
-const editor = useAnnotationEditor({
+const editor = reactive(useAnnotationEditor({
   canvasRef,
   stageRef,
   capture,
   onClose: () => annotationStore.close(),
-})
+}))
 
 watch(
   () => annotationStore.visible,
