@@ -5,6 +5,7 @@ on:
     branches:
       - feature/documentation-mode
       - fix/documentation-ux-v1
+      - fix/documentation-ux-handler-v2
   pull_request:
     branches:
       - main
