@@ -22,7 +22,7 @@ import {
   windowIPCPlugin,
 } from '@escrcpy/electron-setup/plugins'
 
-import { browserWindowHeight, browserWindowWidth, getLogoPath } from './configs/index.js'
+import { browserWindowHeight, browserWindowWidth } from './configs/index.js'
 import { getAppBackgroundColor } from './helpers/index.js'
 
 import {
@@ -53,7 +53,6 @@ const mainApp = createElectronApp({
   preloadDir: __dirname,
   rendererDir: path.join(__dirname, '../dist'),
   devRendererDir: process.env.VITE_DEV_SERVER_URL,
-  icon: getLogoPath(),
   width: browserWindowWidth,
   height: browserWindowHeight,
   backgroundColor: getAppBackgroundColor(),
