@@ -106,7 +106,9 @@ async function enterDnd(deviceId) {
     setMap(DND_SESSION_STORE_KEY, sessions)
   }
 
-  await setDnd(deviceId, 'priority')
+  // Documentation capture should be interruption-free. Use total silence while
+  // the session is active, then restore the user's previous zen mode exactly.
+  await setDnd(deviceId, 'none')
   return getDndStatus(deviceId)
 }
 
