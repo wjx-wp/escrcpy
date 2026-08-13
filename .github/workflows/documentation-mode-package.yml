@@ -16,6 +16,7 @@ concurrency:
 
 jobs:
   windows-x64:
+    # Release-candidate packaging for the documentation workflow.
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
