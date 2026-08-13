@@ -40,6 +40,7 @@
 <script setup>
 import Arrange from './components/arrange/index.vue'
 import Documentation from './components/documentation/index.vue'
+import DocumentationWorkbench from './components/documentation-workbench/index.vue'
 import DocumentationWorkspace from './components/documentation-workspace/index.vue'
 import Log from './components/log/index.vue'
 import Restart from './components/restart/index.vue'
@@ -49,6 +50,12 @@ import Terminal from './components/terminal/index.vue'
 const props = defineProps({})
 
 const actionModel = [
+  {
+    label: 'Documentation Workbench',
+    title: '文档工作台：连续截图、批量标注、步骤合集',
+    fontIcon: 'i-bi-layout-text-window-reverse',
+    component: DocumentationWorkbench,
+  },
   {
     label: 'Documentation Project',
     title: '打开已保存的文档标注工程',
