@@ -1,3 +1,5 @@
+import { useAnnotationStore } from '$/store/annotation/index.js'
+import { useDocumentationStore } from '$/store/documentation/index.js'
 import { sleep } from '$/utils/index.js'
 
 export function useDocumentationAction() {
