@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { app, ipcMain, shell as electronShell } from 'electron'
+import { app, shell as electronShell, ipcMain } from 'electron'
 import electronStore from '$electron/helpers/store/index.js'
 import { getAdbPath } from '$electron/configs/which/index.js'
 
@@ -25,7 +25,7 @@ function normalizeSetting(value) {
 }
 
 async function runAdb(deviceId, args = []) {
-  const adbPath = getAdbPath()
+  const adbPath = getAdbPath() || getAdbPath({ onlyDefault: true })
   if (!adbPath) {
     throw new Error('ADB executable was not found')
   }
