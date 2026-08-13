@@ -29,6 +29,7 @@ import {
   contextMenuService,
   documentationService,
   documentationUxService,
+  documentationWorkflowService,
   edgerService,
   handlesService,
   launchService,
@@ -63,6 +64,7 @@ mainApp.use(mainModule)
 mainApp.use(lifecycleService)
 mainApp.use(documentationService)
 mainApp.use(documentationUxService)
+mainApp.use(documentationWorkflowService)
 
 mainApp.use(themePlugin)
 mainApp.use(windowIPCPlugin)
