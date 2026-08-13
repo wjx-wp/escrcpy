@@ -7,6 +7,7 @@ on:
       - fix/documentation-ux-v1
       - fix/documentation-ux-handler-v2
       - fix/documentation-capture-v4
+      - fix/documentation-nativeimage-v5
   pull_request:
     branches:
       - main
@@ -55,7 +56,7 @@ jobs:
           desktop/electron/main.js
           desktop/electron/services/index.js
           desktop/electron/services/documentation/index.js
-          desktop/electron/services/documentation-ux/index.js
+          desktop/electron/services/documentation-ux-native/index.js
           desktop/src/App.vue
           desktop/src/components/annotation-editor/fabric-compat.js
           desktop/src/components/annotation-editor/index.vue
@@ -74,6 +75,14 @@ jobs:
           desktop/src/store/documentation/index.js
           desktop/vite.config.js
 
+      - name: Guard against sharp in Documentation main-process capture
+        shell: pwsh
+        run: |
+          $source = Get-Content 'desktop/electron/services/documentation-ux-native/index.js' -Raw
+          if ($source -match "from ['\"]sharp['\"]" -or $source -match "require\(['\"]sharp['\"]\)") {
+            throw 'Documentation capture must not import sharp in the Electron main process.'
+          }
+
       - name: Build desktop app
         env:
           NODE_OPTIONS: --max-old-space-size=4096
@@ -90,11 +99,12 @@ jobs:
             'documentation-workspace-get',
             'documentation-dnd-enter',
             'documentation-workspace-choose',
-            'documentation-capture-screen'
+            'documentation-capture-screen',
+            'phone-screenshot-not-created'
           )) {
             $found = Select-String -Path $mainBundles.FullName -Pattern $pattern -SimpleMatch -Quiet
             if (-not $found) {
-              throw "Required Documentation runtime handler is missing from generated Electron main chunks: $pattern"
+              throw "Required Documentation runtime code is missing from generated Electron main chunks: $pattern"
             }
           }
 
