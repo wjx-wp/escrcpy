@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { ipcMain, shell as electronShell } from 'electron'
+import { shell as electronShell, ipcMain } from 'electron'
 
 const MANIFEST_FILE = 'session.json'
 const COMPOSE_DIR = 'compose'
@@ -71,8 +71,8 @@ async function readProjectStepMax(projectPath) {
 
   const values = Array.isArray(project?.annotations)
     ? project.annotations
-      .filter(item => item?.annotationType === 'step')
-      .map(item => Number(item?.stepNumber) || 0)
+        .filter(item => item?.annotationType === 'step')
+        .map(item => Number(item?.stepNumber) || 0)
     : []
 
   const editorCounter = Math.max(0, Number(project?.editor?.stepCounter || 0) - 1)
