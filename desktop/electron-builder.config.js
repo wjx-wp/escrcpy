@@ -5,8 +5,8 @@ const mirror = (raw && raw !== 'undefined') ? raw : null
 
 /** @type {import('electron-builder').Configuration} */
 export default {
-  productName: 'Escrcpy',
-  appId: 'org.viarotel.escrcpy',
+  productName: 'Escrcpy Docs',
+  appId: 'io.github.wjx-wp.escrcpy.docs',
 
   directories: {
     output: 'dist-release',
@@ -34,7 +34,7 @@ export default {
       { target: 'portable', arch: ['x64', 'arm64'] },
       // { target: 'appx', arch: ['x64', 'arm64'] },
     ],
-    artifactName: '${productName}-${version}-win-${arch}.${ext}',
+    artifactName: 'Escrcpy-Docs-${version}-win-${arch}.${ext}',
     extraResources: {
       from: 'electron/resources/extra',
       to: 'extra',
@@ -43,7 +43,7 @@ export default {
   },
 
   nsis: {
-    artifactName: '${productName}-${version}-win-setup-${arch}.${ext}',
+    artifactName: 'Escrcpy-Docs-${version}-win-setup-${arch}.${ext}',
     shortcutName: '${productName}',
     uninstallDisplayName: '${productName}',
     oneClick: false,
@@ -53,14 +53,14 @@ export default {
   },
 
   portable: {
-    artifactName: '${productName}-${version}-win-portable-${arch}.${ext}',
+    artifactName: 'Escrcpy-Docs-${version}-win-portable-${arch}.${ext}',
     requestExecutionLevel: 'user',
   },
 
   appx: {
-    identityName: 'viarotel.Escrcpy',
+    identityName: 'wjxwp.EscrcpyDocs',
     publisher: 'CN=E67CC10B-A1BE-413C-BC3B-6E1137E0742D',
-    publisherDisplayName: 'viarotel',
+    publisherDisplayName: 'wjx-wp',
     languages: ['zh-CN', 'en-US', 'zh-TW'],
   },
 
@@ -70,7 +70,7 @@ export default {
       { target: 'dmg', arch: ['x64', 'arm64'] },
       { target: 'zip', arch: ['x64', 'arm64'] },
     ],
-    artifactName: '${productName}-${version}-mac-${arch}.${ext}',
+    artifactName: 'Escrcpy-Docs-${version}-mac-${arch}.${ext}',
     extraResources: {
       from: 'electron/resources/extra',
       to: 'extra',
@@ -92,14 +92,14 @@ export default {
 
   linux: {
     icon: 'logo.icns',
-    maintainer: 'viarotel@qq.com',
+    maintainer: 'wjx-wp',
     category: 'Utility',
     target: [
       { target: 'AppImage', arch: ['x64', 'arm64'] },
       { target: 'deb', arch: ['x64', 'arm64'] },
       // { target: 'flatpak', arch: ['x64', 'arm64'] },
     ],
-    artifactName: '${productName}-${version}-linux-${arch}.${ext}',
+    artifactName: 'Escrcpy-Docs-${version}-linux-${arch}.${ext}',
     extraResources: {
       from: 'electron/resources/extra',
       to: 'extra',
@@ -132,9 +132,9 @@ export default {
 
   publish: {
     provider: 'github',
-    owner: 'viarotel-org',
+    owner: 'wjx-wp',
     repo: 'escrcpy',
-    updaterCacheDirName: 'escrcpy-updater',
+    updaterCacheDirName: 'escrcpy-docs-updater',
   },
 
   electronDownload: {
