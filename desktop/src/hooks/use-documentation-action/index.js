@@ -317,13 +317,59 @@ export function useDocumentationAction() {
 
       documentationStore.setStatus(device.id, { captureSession: capture })
 
-      await window.$preload.adb.screencap(device.id, {
-        savePath: capture.originalPath,
-      })
+      let captureResult
+      try {
+        captureResult = await window.$preload.ipcRenderer.invoke(
+          'documentation-capture-screen',
+          {
+            deviceId: device.id,
+            savePath: capture.originalPath,
+            secureFallback: true,
+            cleanupDeviceCopy: true,
+          },
+        )
+      }
+      catch (error) {
+        // Keep the old raw ADB path as a hard fallback so a future optional
+        // capture helper regression never disables ordinary screenshots.
+        console.warn('[documentation] Secure-aware capture unavailable, using raw ADB:', error)
+        await window.$preload.adb.screencap(device.id, {
+          savePath: capture.originalPath,
+        })
+        captureResult = {
+          backend: 'adb',
+          secureBlack: false,
+          fallbackAttempted: false,
+        }
+      }
+
+      if (captureResult?.secureBlack) {
+        const rootText = captureResult.rootAvailable ? 'Root ✓' : 'Root 未检测到'
+        const moduleText = captureResult.enableScreenshotModule
+          ? 'Enable Screenshot ✓'
+          : 'Enable Screenshot 未检测到'
+
+        ElNotification({
+          title: '检测到安全窗口，截图仍被系统保护',
+          message: `${rootText} · ${moduleText}。已尝试 SystemUI 截图回退；请确认 LSPosed 模块已启用并重启手机。`,
+          type: 'warning',
+          duration: 9000,
+          position: 'bottom-right',
+        })
+        return false
+      }
+
+      const result = {
+        ...capture,
+        captureBackend: captureResult?.backend || 'adb',
+        secureFallbackUsed: captureResult?.backend === 'systemui',
+      }
 
       if (notify) {
         ElNotification({
-          title: `F8 已保存 · ${capture.baseName}.png`,
+          title: result.secureFallbackUsed
+            ? `F8 已保存 · 安全窗口回退 · ${capture.baseName}.png`
+            : `F8 已保存 · ${capture.baseName}.png`,
           message: capture.originalPath,
           type: 'success',
           duration: 5500,
@@ -337,7 +383,7 @@ export function useDocumentationAction() {
         })
       }
 
-      return capture
+      return result
     }
     catch (error) {
       ElMessage.warning(error?.message || String(error))

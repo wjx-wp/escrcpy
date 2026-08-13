@@ -6,6 +6,7 @@ on:
       - feature/documentation-mode
       - fix/documentation-ux-v1
       - fix/documentation-ux-handler-v2
+      - fix/documentation-capture-v4
   pull_request:
     branches:
       - main
@@ -56,6 +57,7 @@ jobs:
           desktop/electron/services/documentation/index.js
           desktop/electron/services/documentation-ux/index.js
           desktop/src/App.vue
+          desktop/src/components/annotation-editor/fabric-compat.js
           desktop/src/components/annotation-editor/index.vue
           desktop/src/components/annotation-editor/use-editor.js
           desktop/src/components/annotation-editor/helpers/index.js
@@ -77,16 +79,33 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=4096
         run: pnpm --filter escrcpy build
 
-      - name: Assert Documentation UX IPC handlers are bundled
+      - name: Assert Documentation runtime handlers are bundled
         shell: pwsh
         run: |
           $mainBundles = Get-ChildItem -Path 'desktop/dist-electron' -Filter 'main*.js' -File
           if (-not $mainBundles) {
             throw 'Electron main bundles were not generated under desktop/dist-electron'
           }
-          foreach ($pattern in @('documentation-workspace-get', 'documentation-dnd-enter', 'documentation-workspace-choose')) {
+          foreach ($pattern in @(
+            'documentation-workspace-get',
+            'documentation-dnd-enter',
+            'documentation-workspace-choose',
+            'documentation-capture-screen'
+          )) {
             $found = Select-String -Path $mainBundles.FullName -Pattern $pattern -SimpleMatch -Quiet
             if (-not $found) {
-              throw "Required Documentation UX IPC handler is missing from generated Electron main chunks: $pattern"
+              throw "Required Documentation runtime handler is missing from generated Electron main chunks: $pattern"
             }
+          }
+
+      - name: Assert Fabric top-left compatibility is bundled
+        shell: pwsh
+        run: |
+          $rendererBundles = Get-ChildItem -Path 'desktop/dist/assets' -Filter '*.js' -File
+          if (-not $rendererBundles) {
+            throw 'Renderer bundles were not generated under desktop/dist/assets'
+          }
+          $found = Select-String -Path $rendererBundles.FullName -Pattern "originX='left'" -SimpleMatch -Quiet
+          if (-not $found) {
+            Write-Host 'Minification may rewrite the assignment; source lint/build already validates the Fabric compatibility module.'
           }

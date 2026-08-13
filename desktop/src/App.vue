@@ -6,6 +6,7 @@
 </template>
 
 <script setup>
+import './components/annotation-editor/fabric-compat.js'
 import Layouts from './layouts/index.vue'
 import AnnotationEditor from './components/annotation-editor/index.vue'
 
