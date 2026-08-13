@@ -40,6 +40,7 @@
 <script setup>
 import Arrange from './components/arrange/index.vue'
 import Documentation from './components/documentation/index.vue'
+import DocumentationWorkspace from './components/documentation-workspace/index.vue'
 import Log from './components/log/index.vue'
 import Restart from './components/restart/index.vue'
 import Search from './components/search/index.vue'
@@ -53,6 +54,12 @@ const actionModel = [
     title: '打开已保存的文档标注工程',
     fontIcon: 'i-bi-folder2-open',
     component: Documentation,
+  },
+  {
+    label: 'Documentation Workspace',
+    title: '设置 F8 文档截图保存目录',
+    fontIcon: 'i-bi-folder-symlink',
+    component: DocumentationWorkspace,
   },
   {
     label: 'device.arrange.name',
