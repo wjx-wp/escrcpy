@@ -16,6 +16,7 @@ const execFileAsync = promisify(execFile)
 const DND_SESSION_STORE_KEY = 'documentation.dndSessions'
 const WORKSPACE_ROOT_STORE_KEY = 'documentation.workspaceRoot'
 const CAPTURE_SESSION_STORE_KEY = 'documentation.captureSessions'
+const PHONE_BATCH_STORE_KEY = 'documentation.phoneCaptureBatches'
 const SCREENSHOT_DIRS = [
   '/sdcard/DCIM/Screenshots',
   '/storage/emulated/0/DCIM/Screenshots',
@@ -51,19 +52,6 @@ async function runAdb(deviceId, args = []) {
     },
   )
   return stdout.trim()
-}
-
-async function runAdbBuffer(deviceId, args = []) {
-  const { stdout = Buffer.alloc(0) } = await execFileAsync(
-    getAdbExecutable(),
-    ['-s', deviceId, ...args],
-    {
-      encoding: null,
-      windowsHide: true,
-      maxBuffer: 32 * 1024 * 1024,
-    },
-  )
-  return Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout)
 }
 
 function runShell(deviceId, args = []) {
@@ -208,10 +196,10 @@ function getWorkspaceRoot(fallback) {
 async function chooseWorkspaceRoot(fallback) {
   const current = getWorkspaceRoot(fallback)
   const result = await dialog.showOpenDialog({
-    title: '选择 GuidePix 工作目录',
+    title: '选择 GuidePix 项目保存位置',
     defaultPath: current,
     properties: ['openDirectory', 'createDirectory'],
-    buttonLabel: '使用此目录',
+    buttonLabel: '使用此位置',
   })
 
   if (result.canceled || !result.filePaths[0]) {
@@ -245,16 +233,18 @@ async function getSystemScreenshotCandidates(deviceId) {
   const command = [
     `for d in ${dirs}; do`,
     'if [ -d "$d" ]; then',
-    'ls -1t "$d"/*.png "$d"/*.jpg "$d"/*.jpeg "$d"/*.webp 2>/dev/null | head -n 3',
+    'ls -1t "$d"/*.png "$d"/*.jpg "$d"/*.jpeg "$d"/*.webp 2>/dev/null | head -n 4',
     'fi',
     'done',
   ].join(' ')
 
   const output = await runShell(deviceId, ['sh', '-c', command]).catch(() => '')
-  return String(output || '')
-    .split(/\r?\n/)
-    .map(item => item.trim())
-    .filter(Boolean)
+  return [...new Set(
+    String(output || '')
+      .split(/\r?\n/)
+      .map(item => item.trim())
+      .filter(Boolean),
+  )]
 }
 
 async function waitForNewSystemScreenshot(deviceId, before) {
@@ -352,41 +342,94 @@ async function pullPhoneScreenshot(deviceId, remotePath, savePath) {
   }
 }
 
-async function captureViaPhone(deviceId, savePath, { cleanupDeviceCopy = true } = {}) {
+function getPhoneBatch(deviceId) {
+  const batches = getMap(PHONE_BATCH_STORE_KEY)
+  return batches[deviceId] || {
+    deviceId,
+    startedAt: 0,
+    pending: [],
+  }
+}
+
+function savePhoneBatch(deviceId, batch) {
+  const batches = getMap(PHONE_BATCH_STORE_KEY)
+  batches[deviceId] = batch
+  setMap(PHONE_BATCH_STORE_KEY, batches)
+}
+
+function getPhoneBatchStatus(deviceId) {
+  const batch = getPhoneBatch(deviceId)
+  return {
+    deviceId,
+    startedAt: batch.startedAt || 0,
+    pendingCount: batch.pending?.length || 0,
+    pending: (batch.pending || []).map(item => ({
+      remotePath: String(item.remotePath || ''),
+      bytes: Number(item.bytes || 0),
+      createdAt: Number(item.createdAt || 0),
+    })),
+  }
+}
+
+async function queuePhoneScreenshot(deviceId) {
+  if (!deviceId) {
+    throw new Error('Device id is required')
+  }
+
   const before = await getSystemScreenshotCandidates(deviceId)
-
-  // Trigger the phone/SystemUI screenshot path so root/LSPosed screenshot
-  // hooks participate in the same path as a normal phone-side screenshot.
   await runShell(deviceId, ['input', 'keyevent', '120'])
-  const remotePath = await waitForNewSystemScreenshot(deviceId, before)
 
+  const remotePath = await waitForNewSystemScreenshot(deviceId, before)
   if (!remotePath) {
-    return {
-      success: false,
-      reason: '手机已经触发截图，但 GuidePix 没有在常用截图目录找到新文件',
-    }
+    throw new Error('手机已触发截图，但 GuidePix 没有在系统截图目录找到新图片')
+  }
+
+  const bytes = await waitForRemoteFileStable(deviceId, remotePath)
+  if (!bytes) {
+    throw new Error('手机截图已经生成，但文件仍在写入，未能进入稳定状态')
+  }
+
+  const batch = getPhoneBatch(deviceId)
+  if (!batch.startedAt) {
+    batch.startedAt = Date.now()
+  }
+  batch.pending ||= []
+  if (!batch.pending.some(item => item.remotePath === remotePath)) {
+    batch.pending.push({
+      remotePath,
+      bytes,
+      createdAt: Date.now(),
+    })
+  }
+  savePhoneBatch(deviceId, batch)
+
+  return {
+    ...getPhoneBatchStatus(deviceId),
+    latest: {
+      remotePath,
+      bytes,
+    },
+  }
+}
+
+async function pullQueuedPhoneScreenshot(payload = {}) {
+  const {
+    deviceId,
+    remotePath,
+    savePath,
+    cleanupDeviceCopy = true,
+  } = payload
+
+  if (!deviceId || !remotePath || !savePath) {
+    throw new Error('Device id, phone screenshot and local save path are required')
   }
 
   const remoteBytes = await waitForRemoteFileStable(deviceId, remotePath)
   if (!remoteBytes) {
-    return {
-      success: false,
-      reason: '已找到手机截图，但文件一直没有进入稳定可读取状态',
-      remotePath,
-    }
+    throw new Error('手机截图文件已不存在或尚未写入完成')
   }
 
-  let pulled
-  try {
-    pulled = await pullPhoneScreenshot(deviceId, remotePath, savePath)
-  }
-  catch (error) {
-    return {
-      success: false,
-      reason: error?.message || String(error),
-      remotePath,
-    }
-  }
+  const pulled = await pullPhoneScreenshot(deviceId, remotePath, savePath)
 
   if (cleanupDeviceCopy) {
     await runShell(deviceId, [
@@ -396,23 +439,33 @@ async function captureViaPhone(deviceId, savePath, { cleanupDeviceCopy = true } 
     ]).catch(() => {})
   }
 
+  const batch = getPhoneBatch(deviceId)
+  batch.pending = (batch.pending || []).filter(item => item.remotePath !== remotePath)
+  if (!batch.pending.length) {
+    batch.startedAt = 0
+  }
+  savePhoneBatch(deviceId, batch)
+
   return {
-    success: true,
+    savePath,
     remotePath,
+    backend: 'phone-native',
+    nativeScreenshot: true,
     remoteBytes,
     ...pulled,
+    pendingCount: batch.pending.length,
   }
 }
 
-async function captureViaAdb(deviceId, savePath) {
-  const raw = await runAdbBuffer(deviceId, ['exec-out', 'screencap', '-p'])
-  if (!raw.length) {
-    throw new Error('ADB screencap returned an empty image')
+function clearPhoneBatch(deviceId) {
+  const batches = getMap(PHONE_BATCH_STORE_KEY)
+  delete batches[deviceId]
+  setMap(PHONE_BATCH_STORE_KEY, batches)
+  return {
+    deviceId,
+    pendingCount: 0,
+    pending: [],
   }
-
-  await fs.promises.mkdir(path.dirname(savePath), { recursive: true })
-  await fs.promises.writeFile(savePath, raw)
-  return true
 }
 
 async function captureDocumentationScreen(payload = {}) {
@@ -420,47 +473,24 @@ async function captureDocumentationScreen(payload = {}) {
     deviceId,
     savePath,
     cleanupDeviceCopy = true,
-    allowAdbFallback = false,
   } = payload
 
   if (!deviceId || !savePath) {
     throw new Error('Device id and save path are required')
   }
 
-  const phoneCapture = await captureViaPhone(deviceId, savePath, {
-    cleanupDeviceCopy,
-  }).catch(error => ({
-    success: false,
-    reason: error?.message || String(error),
-  }))
-
-  if (phoneCapture.success) {
-    return {
-      savePath,
-      backend: 'phone-native',
-      nativeScreenshot: true,
-      remotePath: phoneCapture.remotePath,
-      bytes: phoneCapture.bytes,
-      width: phoneCapture.width,
-      height: phoneCapture.height,
-      fallbackAttempted: false,
-    }
+  const queued = await queuePhoneScreenshot(deviceId)
+  const remotePath = queued.latest?.remotePath
+  if (!remotePath) {
+    throw new Error('手机截图没有进入 GuidePix 待同步队列')
   }
 
-  if (!allowAdbFallback) {
-    throw new Error(`手机截图未能拉取到电脑：${phoneCapture.reason || '未知原因'}。手机相册中的截图不会受影响。`)
-  }
-
-  console.warn('[documentation] Phone-native screenshot failed, explicitly falling back to ADB:', phoneCapture.reason)
-  await captureViaAdb(deviceId, savePath)
-
-  return {
+  return pullQueuedPhoneScreenshot({
+    deviceId,
+    remotePath,
     savePath,
-    backend: 'adb',
-    nativeScreenshot: false,
-    fallbackAttempted: true,
-    fallbackReason: phoneCapture.reason,
-  }
+    cleanupDeviceCopy,
+  })
 }
 
 export default {
@@ -476,6 +506,10 @@ export default {
     ipcMain.handle('documentation-workspace-reset', () => resetWorkspaceRoot())
     ipcMain.handle('documentation-workspace-open', (_, fallback) => openWorkspaceRoot(fallback))
     ipcMain.handle('documentation-capture-screen', (_, payload) => captureDocumentationScreen(payload))
+    ipcMain.handle('documentation-phone-capture-queue', (_, deviceId) => queuePhoneScreenshot(deviceId))
+    ipcMain.handle('documentation-phone-batch-status', (_, deviceId) => getPhoneBatchStatus(deviceId))
+    ipcMain.handle('documentation-phone-pull', (_, payload) => pullQueuedPhoneScreenshot(payload))
+    ipcMain.handle('documentation-phone-batch-clear', (_, deviceId) => clearPhoneBatch(deviceId))
 
     const recoverPending = () => {
       restoreAllDndSessions().then((results) => {
@@ -503,6 +537,10 @@ export default {
       ipcMain.removeHandler('documentation-workspace-reset')
       ipcMain.removeHandler('documentation-workspace-open')
       ipcMain.removeHandler('documentation-capture-screen')
+      ipcMain.removeHandler('documentation-phone-capture-queue')
+      ipcMain.removeHandler('documentation-phone-batch-status')
+      ipcMain.removeHandler('documentation-phone-pull')
+      ipcMain.removeHandler('documentation-phone-batch-clear')
     }
   },
 }
