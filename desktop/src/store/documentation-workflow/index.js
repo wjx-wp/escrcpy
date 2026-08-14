@@ -1,15 +1,15 @@
 export const useDocumentationWorkflowStore = defineStore('documentation-workflow', () => {
   const visible = ref(false)
-  const device = ref(null)
-  const session = ref(null)
+  const device = shallowRef(null)
+  const session = shallowRef(null)
   const manifest = ref(null)
   const tab = ref('capture')
   const selectedIds = ref([])
   const composeVariantMap = ref({})
 
   function open(payload = {}) {
-    device.value = payload.device || null
-    session.value = payload.session || null
+    device.value = payload.device ? markRaw(toRaw(payload.device)) : null
+    session.value = payload.session ? markRaw({ ...toRaw(payload.session) }) : null
     tab.value = payload.tab || 'capture'
     visible.value = true
   }
