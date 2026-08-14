@@ -161,6 +161,16 @@ export function useDocumentationAction() {
     return session
   }
 
+  async function getPendingCaptures(device) {
+    if (!device?.id) {
+      return { pendingCount: 0, pending: [] }
+    }
+    return window.$preload.ipcRenderer.invoke(
+      'documentation-phone-batch-status',
+      device.id,
+    )
+  }
+
   async function enter(device, { silent = false } = {}) {
     if (!device?.id) {
       return false
@@ -198,6 +208,13 @@ export function useDocumentationAction() {
         return null
       })
 
+      await window.$preload.ipcRenderer.invoke(
+        'documentation-phone-batch-begin',
+        device.id,
+      ).catch((error) => {
+        console.warn('[documentation] Failed to start phone screenshot baseline:', error)
+      })
+
       const merged = {
         ...(status || { active: true, tracked: true }),
         dnd,
@@ -207,10 +224,10 @@ export function useDocumentationAction() {
 
       if (!silent) {
         if (dnd?.active) {
-          ElMessage.success('文档模式已开启 · 勿扰已开启')
+          ElMessage.success('文档模式已开启 · 勿扰已开启 · 手机截图监听已就绪')
         }
         else {
-          ElMessage.success('文档模式已开启')
+          ElMessage.success('文档模式已开启 · 手机截图监听已就绪')
         }
       }
 
@@ -228,6 +245,19 @@ export function useDocumentationAction() {
 
     loading.value = true
     try {
+      const pendingBeforeExit = await getPendingCaptures(device).catch(() => ({
+        pendingCount: 0,
+      }))
+
+      let syncSucceeded = true
+      if (pendingBeforeExit?.pendingCount > 0) {
+        const synced = await syncPendingCaptures(device, {
+          notify: !silent,
+        })
+        syncSucceeded = Array.isArray(synced)
+          && synced.length === pendingBeforeExit.pendingCount
+      }
+
       const status = await window.$preload.ipcRenderer.invoke(
         'documentation-demo-exit',
         device.id,
@@ -243,6 +273,13 @@ export function useDocumentationAction() {
         return null
       })
 
+      if (syncSucceeded) {
+        await window.$preload.ipcRenderer.invoke(
+          'documentation-phone-batch-clear',
+          device.id,
+        ).catch(() => {})
+      }
+
       documentationStore.setStatus(device.id, {
         ...(status || { active: false, tracked: false }),
         dnd,
@@ -250,7 +287,12 @@ export function useDocumentationAction() {
       })
 
       if (!silent) {
-        ElMessage.success('文档模式和勿扰状态已恢复')
+        if (syncSucceeded) {
+          ElMessage.success('文档模式和勿扰状态已恢复')
+        }
+        else {
+          ElMessage.warning('文档模式已恢复，但仍有手机截图等待下次同步')
+        }
       }
 
       return {
@@ -301,16 +343,6 @@ export function useDocumentationAction() {
     return entered
   }
 
-  async function getPendingCaptures(device) {
-    if (!device?.id) {
-      return { pendingCount: 0, pending: [] }
-    }
-    return window.$preload.ipcRenderer.invoke(
-      'documentation-phone-batch-status',
-      device.id,
-    )
-  }
-
   async function captureToPhone(device, { ensureDemoMode = true, notify = true } = {}) {
     if (!device?.id) {
       return false
@@ -333,7 +365,7 @@ export function useDocumentationAction() {
       if (notify) {
         ElNotification({
           title: `手机已截图 · 待同步 ${queued.pendingCount} 张`,
-          message: '继续按 F8 可连续截图；完成后按 Ctrl+F8 一次同步到电脑。',
+          message: '继续按 F8 或直接在手机上截图；完成后一次同步到电脑。',
           type: 'success',
           duration: 3500,
           position: 'bottom-right',
@@ -376,7 +408,11 @@ export function useDocumentationAction() {
 
   async function syncPendingCaptures(
     device,
-    { latestOnly = false, notify = true } = {},
+    {
+      latestOnly = false,
+      notify = true,
+      remotePaths = [],
+    } = {},
   ) {
     if (!device?.id) {
       return false
@@ -386,7 +422,12 @@ export function useDocumentationAction() {
     try {
       const pendingStatus = await getPendingCaptures(device)
       const pending = pendingStatus?.pending || []
-      const items = latestOnly ? pending.slice(-1) : pending
+      const requested = new Set(remotePaths.filter(Boolean))
+      const items = requested.size
+        ? pending.filter(item => requested.has(item.remotePath))
+        : latestOnly
+          ? pending.slice(-1)
+          : pending
 
       if (!items.length) {
         if (notify) {
@@ -414,7 +455,7 @@ export function useDocumentationAction() {
             deviceId: device.id,
             remotePath: item.remotePath,
             savePath: capture.originalPath,
-            cleanupDeviceCopy: true,
+            cleanupDeviceCopy: item.source !== 'manual',
           },
         )
 
@@ -470,12 +511,13 @@ export function useDocumentationAction() {
 
   async function captureAndAnnotate(device) {
     const queued = await captureToPhone(device, { notify: false })
-    if (!queued) {
+    const remotePath = queued?.latest?.remotePath
+    if (!remotePath) {
       return false
     }
 
     const results = await syncPendingCaptures(device, {
-      latestOnly: true,
+      remotePaths: [remotePath],
       notify: false,
     })
     const capture = results?.[results.length - 1]
