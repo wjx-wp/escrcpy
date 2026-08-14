@@ -3,6 +3,7 @@
     <Layouts />
     <AnnotationEditor />
     <DocumentationWorkbench />
+    <DocumentationSyncDock />
   </el-config-provider>
 </template>
 
@@ -10,6 +11,7 @@
 import './components/annotation-editor/fabric-compat.js'
 import Layouts from './layouts/index.vue'
 import AnnotationEditor from './components/annotation-editor/index.vue'
+import DocumentationSyncDock from './components/documentation-sync-dock/index.vue'
 import DocumentationWorkbench from './components/documentation-workbench/index.vue'
 
 const router = useRouter()
