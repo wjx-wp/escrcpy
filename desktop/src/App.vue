@@ -15,12 +15,17 @@ import DocumentationWorkbench from './components/documentation-workbench/index.v
 const router = useRouter()
 const deviceStore = useDeviceStore()
 const documentationStore = useDocumentationStore()
-const { captureOriginal, captureAndAnnotate } = useDocumentationAction()
+const {
+  captureOriginal,
+  captureAndAnnotate,
+  syncPendingCaptures,
+} = useDocumentationAction()
 
 const { locale, size } = useWindowStateSync()
 
 const documentationShortcuts = [
   { id: 'documentation-capture', accelerator: 'F8' },
+  { id: 'documentation-sync', accelerator: 'Ctrl+F8' },
   { id: 'documentation-annotate', accelerator: 'Shift+F8' },
 ]
 
@@ -101,7 +106,11 @@ function getDocumentationDevice() {
 }
 
 async function handleDocumentationShortcut(event, id) {
-  if (!['documentation-capture', 'documentation-annotate'].includes(id)) {
+  if (![
+    'documentation-capture',
+    'documentation-sync',
+    'documentation-annotate',
+  ].includes(id)) {
     return
   }
 
@@ -112,6 +121,11 @@ async function handleDocumentationShortcut(event, id) {
 
   if (id === 'documentation-capture') {
     await captureOriginal(device)
+    return
+  }
+
+  if (id === 'documentation-sync') {
+    await syncPendingCaptures(device)
     return
   }
 
