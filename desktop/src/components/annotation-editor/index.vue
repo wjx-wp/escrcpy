@@ -10,12 +10,34 @@
     @closed="editor.dispose"
   >
     <template #header>
-      <div class="h-13 flex items-center gap-2 px-2">
+      <div class="h-14 flex items-center gap-2 px-3 bg-white dark:bg-gray-950">
         <el-button text :icon="ArrowLeft" @click="editor.close">
           返回
         </el-button>
 
-        <div class="min-w-0 flex-1">
+        <template v-if="annotationStore.hasQueue">
+          <el-button-group>
+            <el-button
+              :disabled="!annotationStore.canPrevious || annotationStore.loadingQueue"
+              title="保存并切换到上一张"
+              @click="moveQueue(-1)"
+            >
+              <i class="i-bi-chevron-left"></i>
+            </el-button>
+            <el-button disabled class="!min-w-24">
+              {{ annotationStore.queuePosition }} / {{ annotationStore.queue.length }}
+            </el-button>
+            <el-button
+              :disabled="!annotationStore.canNext || annotationStore.loadingQueue"
+              title="保存并切换到下一张"
+              @click="moveQueue(1)"
+            >
+              <i class="i-bi-chevron-right"></i>
+            </el-button>
+          </el-button-group>
+        </template>
+
+        <div class="min-w-0 flex-1 ml-1">
           <div class="flex items-center gap-2 min-w-0">
             <div class="font-medium truncate">
               {{ capture?.baseName || '-' }}.png
@@ -36,9 +58,16 @@
             >
               未保存
             </el-tag>
+            <el-tag
+              v-if="capture?.workflowStepMode === 'global'"
+              size="small"
+              effect="plain"
+            >
+              全局步骤 {{ editor.stepCounter }}
+            </el-tag>
           </div>
           <div class="text-xs text-gray-500 truncate" :title="capture?.root">
-            {{ capture?.deviceName || capture?.deviceId || 'Documentation' }}
+            {{ capture?.caption || capture?.deviceName || capture?.deviceId || 'GuidePix' }}
             <span v-if="capture?.root"> · {{ capture.root }}</span>
           </div>
         </div>
@@ -51,14 +80,6 @@
         >
           <i class="i-bi-folder2-open mr-1"></i>
           目录
-        </el-button>
-        <el-button
-          text
-          title="设置以后 F8 文档截图的保存目录"
-          @click="chooseCaptureWorkspace"
-        >
-          <i class="i-bi-folder-symlink mr-1"></i>
-          设置目录
         </el-button>
         <el-button :disabled="!editor.ready" @click="editor.saveProject()">
           保存工程
@@ -284,7 +305,6 @@ const canvasRef = ref(null)
 const stageRef = ref(null)
 const viewZoom = ref(1.25)
 
-const { chooseWorkspaceRoot } = useDocumentationAction()
 const capture = computed(() => annotationStore.capture)
 
 const editor = reactive(useAnnotationEditor({
@@ -304,16 +324,32 @@ const dialogVisible = computed({
 })
 
 watch(
-  () => annotationStore.visible,
-  async (visible) => {
+  () => [annotationStore.visible, capture.value?.projectPath],
+  async ([visible]) => {
     if (!visible) {
       return
     }
     viewZoom.value = 1.25
     await nextTick()
     await editor.init()
+
+    if (capture.value?.workflowStepMode === 'global') {
+      const workflowCounter = Number(capture.value?.workflowStepCounter) || 1
+      editor.stepCounter = Math.max(Number(editor.stepCounter) || 1, workflowCounter)
+    }
+    else if (capture.value?.workflowStepMode === 'per-image' && !capture.value?.projectData) {
+      editor.stepCounter = 1
+    }
   },
+  { deep: false },
 )
+
+async function moveQueue(delta) {
+  if (editor.dirty) {
+    await editor.saveProject({ silent: true })
+  }
+  await annotationStore.move(delta)
+}
 
 function fitView() {
   viewZoom.value = 1
@@ -325,13 +361,6 @@ function zoomIn() {
 
 function zoomOut() {
   viewZoom.value = Math.max(0.75, Math.round((viewZoom.value - 0.25) * 100) / 100)
-}
-
-async function chooseCaptureWorkspace() {
-  await chooseWorkspaceRoot({
-    id: capture.value?.deviceId,
-    name: capture.value?.deviceName,
-  })
 }
 </script>
 
@@ -346,7 +375,7 @@ async function chooseCaptureWorkspace() {
 
 .documentation-editor-dialog .el-dialog__body {
   @apply !p-0;
-  height: calc(100vh - 53px);
+  height: calc(100vh - 57px);
 }
 
 .documentation-toolbar .el-button + .el-button {

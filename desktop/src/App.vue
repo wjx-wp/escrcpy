@@ -2,6 +2,7 @@
   <el-config-provider :locale="locale" :size="size">
     <Layouts />
     <AnnotationEditor />
+    <DocumentationWorkbench />
   </el-config-provider>
 </template>
 
@@ -9,6 +10,7 @@
 import './components/annotation-editor/fabric-compat.js'
 import Layouts from './layouts/index.vue'
 import AnnotationEditor from './components/annotation-editor/index.vue'
+import DocumentationWorkbench from './components/documentation-workbench/index.vue'
 
 const router = useRouter()
 const deviceStore = useDeviceStore()

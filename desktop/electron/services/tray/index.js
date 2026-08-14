@@ -114,12 +114,16 @@ export default {
       return false
     }
 
-    function createTray() {
+    async function createTray() {
       hideApp()
 
-      tray = new Tray(trayPath)
+      let icon = trayPath
+      if (process.platform === 'win32' && app.isPackaged) {
+        icon = await app.getFileIcon(process.execPath, { size: 'normal' })
+      }
 
-      tray.setToolTip('escrcpy')
+      tray = new Tray(icon)
+      tray.setToolTip('GuidePix')
 
       tray.on('click', () => {
         showApp()

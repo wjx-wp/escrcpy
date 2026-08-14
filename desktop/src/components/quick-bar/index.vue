@@ -5,13 +5,6 @@
       v-for="item in actionModel"
       :key="item.label"
       class="flex-none"
-      v-bind="{
-        ...(item.command
-          ? {
-            onClick: () => handleCommand(item),
-          }
-          : {}),
-      }"
     >
       <template #default="{ trigger, ...slotProps } = {}">
         <el-button
@@ -39,25 +32,23 @@
 
 <script setup>
 import Arrange from './components/arrange/index.vue'
-import Documentation from './components/documentation/index.vue'
+import DocumentationWorkbench from './components/documentation-workbench/index.vue'
 import DocumentationWorkspace from './components/documentation-workspace/index.vue'
 import Log from './components/log/index.vue'
 import Restart from './components/restart/index.vue'
 import Search from './components/search/index.vue'
 import Terminal from './components/terminal/index.vue'
 
-const props = defineProps({})
-
 const actionModel = [
   {
-    label: 'Documentation Project',
-    title: '打开已保存的文档标注工程',
-    fontIcon: 'i-bi-folder2-open',
-    component: Documentation,
+    label: 'GuidePix Workbench',
+    title: 'GuidePix 工作台：连续截图、连续标注、合集导出',
+    fontIcon: 'i-bi-layout-text-window-reverse',
+    component: DocumentationWorkbench,
   },
   {
-    label: 'Documentation Workspace',
-    title: '设置 F8 文档截图保存目录',
+    label: 'GuidePix Workspace',
+    title: '设置 GuidePix 项目保存目录',
     fontIcon: 'i-bi-folder-symlink',
     component: DocumentationWorkspace,
   },
@@ -87,8 +78,6 @@ const actionModel = [
     component: Search,
   },
 ]
-
-function handleCommand() {}
 </script>
 
 <style></style>

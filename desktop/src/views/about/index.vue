@@ -1,15 +1,28 @@
 <template>
   <div class="h-full">
-    <div class="h-full flex flex-col items-center justify-center space-y-[4vh] -mt-[4vh]">
-      <a class="block" :href="escrcpyURL" target="_blank">
-        <img src="$electron/resources/build/logo.png" class="h-[32vh] max-h-72 drop-shadow drop-shadow-color-gray-300" alt="" />
+    <div class="h-full flex flex-col items-center justify-center space-y-[3vh] -mt-[3vh]">
+      <a class="block" :href="homepage" target="_blank">
+        <img
+          src="$electron/resources/build/logo.svg"
+          class="h-[28vh] max-h-64 drop-shadow-lg"
+          alt="GuidePix"
+        />
       </a>
 
-      <div class="text-lg lg:text-xl xl:text-2xl text-center italic text-gray-700 dark:text-white">
-        {{ $t("about.description") }}
+      <div class="text-center">
+        <div class="text-3xl font-bold text-gray-900 dark:text-white">
+          GuidePix
+        </div>
+        <div class="mt-2 text-base text-gray-500">
+          Capture · Annotate · Compose
+        </div>
       </div>
 
-      <div class="pt-[4vh]">
+      <div class="max-w-xl text-center text-sm leading-7 text-gray-500 px-6">
+        把手机上的一次操作，直接变成清晰、可修改、可发布的步骤指南。
+      </div>
+
+      <div class="pt-[2vh]">
         <el-button
           :loading="loading"
           type="primary"
@@ -23,61 +36,39 @@
           }}
         </el-button>
 
-        <el-button :size="$grid.lg ? 'large' : 'default'" class="group" @click="onDocsClick">
-          <span class="pl-1">{{ $t('about.docs.name') }}</span>
-        </el-button>
-
-        <el-button :size="$grid.lg ? 'large' : 'default'" class="group" @click="onDonateClick">
-          <span class="group-hover:animate-rubber-band text-red-500">♥</span>
-          <span class="pl-1">{{ $t('about.donate.title') }}</span>
+        <el-button :size="$grid.lg ? 'large' : 'default'" @click="openRepository">
+          GitHub
         </el-button>
       </div>
 
-      <div class="text-sm">
-        Supported by
-
-        <a
-          class="hover:underline text-primary-500"
-          href="https://viarotel.github.io/"
-          target="_blank"
-        >Viarotel</a>
-
-        v{{ version }}
+      <div class="text-xs text-gray-500 text-center leading-6">
+        <div>GuidePix v{{ version }}</div>
+        <div>
+          Based on
+          <a
+            class="hover:underline text-primary-500"
+            href="https://github.com/viarotel-org/escrcpy"
+            target="_blank"
+          >Escrcpy</a>
+          · Powered by scrcpy &amp; Fabric.js
+        </div>
       </div>
     </div>
 
-    <SponsorDialog ref="sponsorDialogRef" />
     <UpdateDialog ref="updateDialogRef" />
   </div>
 </template>
 
 <script setup>
 import { homepage, version } from '/package.json'
-import SponsorDialog from './components/sponsor-dialog/index.vue'
 import UpdateDialog from './components/update-dialog/index.vue'
 
 const loading = ref(false)
 const percent = ref(0)
-const escrcpyURL = homepage
-const { language: locale } = useI18n()
-
-const docsUrl = computed(() => {
-  const localePath = {
-    'zh-CN': 'zhHans/',
-  }[locale.value] || ''
-
-  return `https://viarotel.eu.org/${localePath}`
-})
-
-const sponsorDialogRef = ref()
 const updateDialogRef = ref()
 
-function onDonateClick() {
-  sponsorDialogRef.value.open()
-}
-
-function onDocsClick() {
-  window.open(docsUrl.value)
+function openRepository() {
+  window.open(homepage)
 }
 
 function handleUpdate() {
@@ -122,20 +113,7 @@ function onUpdateDownloaded() {
 function onUpdateError() {
   window.$preload.ipcRenderer.on('update-error', async (_, ret) => {
     loading.value = false
-    try {
-      await ElMessageBox.confirm(
-        window.t('about.update-error.message'),
-        window.t('about.update-error.title'),
-        {
-          closeOnClickModal: false,
-          type: 'error',
-        },
-      )
-      window.open(`${docsUrl.value}/guide/started`)
-    }
-    catch (error) {
-      console.warn(error.message)
-    }
+    ElMessage.warning(ret?.message || window.t('about.update-error.message'))
   })
 }
 
