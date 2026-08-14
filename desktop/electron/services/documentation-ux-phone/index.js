@@ -19,9 +19,7 @@ const CAPTURE_SESSION_STORE_KEY = 'documentation.captureSessions'
 const PHONE_BATCH_STORE_KEY = 'documentation.phoneCaptureBatches'
 const SCREENSHOT_DIRS = [
   '/sdcard/DCIM/Screenshots',
-  '/storage/emulated/0/DCIM/Screenshots',
   '/sdcard/Pictures/Screenshots',
-  '/storage/emulated/0/Pictures/Screenshots',
 ]
 
 function getMap(key) {
@@ -229,8 +227,7 @@ async function openWorkspaceRoot(fallback) {
 
 async function listSystemScreenshots(deviceId, limit = 12) {
   const safeLimit = Math.max(1, Math.min(500, Number(limit) || 12))
-  const uniqueDirs = [...new Set(SCREENSHOT_DIRS)]
-  const dirs = uniqueDirs.map(shellQuote).join(' ')
+  const dirs = SCREENSHOT_DIRS.map(shellQuote).join(' ')
   const command = [
     `for d in ${dirs}; do`,
     'if [ -d "$d" ]; then',
@@ -405,7 +402,7 @@ async function refreshPhoneBatch(deviceId) {
   const pendingPaths = new Set((batch.pending || []).map(item => item.remotePath))
   let changed = false
 
-  for (const remotePath of current) {
+  for (const remotePath of [...current].reverse()) {
     if (baseline.has(remotePath) || pendingPaths.has(remotePath)) {
       continue
     }
