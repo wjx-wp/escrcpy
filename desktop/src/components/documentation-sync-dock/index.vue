@@ -43,8 +43,10 @@ const activeDevice = computed(() => {
 
 async function refreshPending() {
   const device = activeDevice.value
-  if (!device?.id || syncing.value) {
-    pendingCount.value = 0
+  if (!device?.id || syncing.value || document.hidden) {
+    if (!device?.id) {
+      pendingCount.value = 0
+    }
     return
   }
 
@@ -79,7 +81,7 @@ watch(
 
 onMounted(() => {
   refreshPending()
-  timer = window.setInterval(refreshPending, 800)
+  timer = window.setInterval(refreshPending, 1500)
 })
 
 onBeforeUnmount(() => {
