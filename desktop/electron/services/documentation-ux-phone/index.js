@@ -227,13 +227,14 @@ async function openWorkspaceRoot(fallback) {
   return root
 }
 
-async function getSystemScreenshotCandidates(deviceId) {
+async function listSystemScreenshots(deviceId, limit = 12) {
+  const safeLimit = Math.max(1, Math.min(500, Number(limit) || 12))
   const uniqueDirs = [...new Set(SCREENSHOT_DIRS)]
   const dirs = uniqueDirs.map(shellQuote).join(' ')
   const command = [
     `for d in ${dirs}; do`,
     'if [ -d "$d" ]; then',
-    'ls -1t "$d"/*.png "$d"/*.jpg "$d"/*.jpeg "$d"/*.webp 2>/dev/null | head -n 4',
+    `ls -1t "$d"/*.png "$d"/*.jpg "$d"/*.jpeg "$d"/*.webp 2>/dev/null | head -n ${safeLimit}`,
     'fi',
     'done',
   ].join(' ')
@@ -252,7 +253,7 @@ async function waitForNewSystemScreenshot(deviceId, before) {
 
   for (let attempt = 0; attempt < 32; attempt += 1) {
     await sleep(250)
-    const current = await getSystemScreenshotCandidates(deviceId)
+    const current = await listSystemScreenshots(deviceId, 16)
     const fresh = current.find(item => !previous.has(item))
     if (fresh) {
       return fresh
@@ -347,6 +348,7 @@ function getPhoneBatch(deviceId) {
   return batches[deviceId] || {
     deviceId,
     startedAt: 0,
+    baseline: [],
     pending: [],
   }
 }
@@ -357,8 +359,7 @@ function savePhoneBatch(deviceId, batch) {
   setMap(PHONE_BATCH_STORE_KEY, batches)
 }
 
-function getPhoneBatchStatus(deviceId) {
-  const batch = getPhoneBatch(deviceId)
+function formatPhoneBatchStatus(deviceId, batch = getPhoneBatch(deviceId)) {
   return {
     deviceId,
     startedAt: batch.startedAt || 0,
@@ -367,8 +368,73 @@ function getPhoneBatchStatus(deviceId) {
       remotePath: String(item.remotePath || ''),
       bytes: Number(item.bytes || 0),
       createdAt: Number(item.createdAt || 0),
+      source: item.source === 'manual' ? 'manual' : 'guidepix',
     })),
   }
+}
+
+async function beginPhoneBatch(deviceId, { reset = false } = {}) {
+  if (!deviceId) {
+    throw new Error('Device id is required')
+  }
+
+  const existing = getPhoneBatch(deviceId)
+  if (existing.startedAt && !reset) {
+    return refreshPhoneBatch(deviceId)
+  }
+
+  const baseline = await listSystemScreenshots(deviceId, 200)
+  const batch = {
+    deviceId,
+    startedAt: Date.now(),
+    baseline,
+    pending: [],
+  }
+  savePhoneBatch(deviceId, batch)
+  return formatPhoneBatchStatus(deviceId, batch)
+}
+
+async function refreshPhoneBatch(deviceId) {
+  const batch = getPhoneBatch(deviceId)
+  if (!batch.startedAt) {
+    return formatPhoneBatchStatus(deviceId, batch)
+  }
+
+  const current = await listSystemScreenshots(deviceId, 200)
+  const baseline = new Set(batch.baseline || [])
+  const pendingPaths = new Set((batch.pending || []).map(item => item.remotePath))
+  let changed = false
+
+  for (const remotePath of current) {
+    if (baseline.has(remotePath) || pendingPaths.has(remotePath)) {
+      continue
+    }
+
+    const bytes = await getRemoteFileSize(deviceId, remotePath)
+    if (bytes <= 1024) {
+      continue
+    }
+
+    batch.pending ||= []
+    batch.pending.push({
+      remotePath,
+      bytes,
+      createdAt: Date.now(),
+      source: 'manual',
+    })
+    pendingPaths.add(remotePath)
+    changed = true
+  }
+
+  if (changed) {
+    savePhoneBatch(deviceId, batch)
+  }
+
+  return formatPhoneBatchStatus(deviceId, batch)
+}
+
+async function getPhoneBatchStatus(deviceId) {
+  return refreshPhoneBatch(deviceId)
 }
 
 async function queuePhoneScreenshot(deviceId) {
@@ -376,7 +442,13 @@ async function queuePhoneScreenshot(deviceId) {
     throw new Error('Device id is required')
   }
 
-  const before = await getSystemScreenshotCandidates(deviceId)
+  let batch = getPhoneBatch(deviceId)
+  if (!batch.startedAt) {
+    await beginPhoneBatch(deviceId)
+    batch = getPhoneBatch(deviceId)
+  }
+
+  const before = await listSystemScreenshots(deviceId, 16)
   await runShell(deviceId, ['input', 'keyevent', '120'])
 
   const remotePath = await waitForNewSystemScreenshot(deviceId, before)
@@ -389,25 +461,25 @@ async function queuePhoneScreenshot(deviceId) {
     throw new Error('手机截图已经生成，但文件仍在写入，未能进入稳定状态')
   }
 
-  const batch = getPhoneBatch(deviceId)
-  if (!batch.startedAt) {
-    batch.startedAt = Date.now()
-  }
+  batch = getPhoneBatch(deviceId)
   batch.pending ||= []
   if (!batch.pending.some(item => item.remotePath === remotePath)) {
     batch.pending.push({
       remotePath,
       bytes,
       createdAt: Date.now(),
+      source: 'guidepix',
     })
   }
   savePhoneBatch(deviceId, batch)
 
+  const status = await refreshPhoneBatch(deviceId)
   return {
-    ...getPhoneBatchStatus(deviceId),
+    ...status,
     latest: {
       remotePath,
       bytes,
+      source: 'guidepix',
     },
   }
 }
@@ -417,12 +489,17 @@ async function pullQueuedPhoneScreenshot(payload = {}) {
     deviceId,
     remotePath,
     savePath,
-    cleanupDeviceCopy = true,
   } = payload
 
   if (!deviceId || !remotePath || !savePath) {
     throw new Error('Device id, phone screenshot and local save path are required')
   }
+
+  const batch = getPhoneBatch(deviceId)
+  const queuedItem = (batch.pending || []).find(item => item.remotePath === remotePath)
+  const cleanupDeviceCopy = payload.cleanupDeviceCopy === undefined
+    ? queuedItem?.source !== 'manual'
+    : Boolean(payload.cleanupDeviceCopy)
 
   const remoteBytes = await waitForRemoteFileStable(deviceId, remotePath)
   if (!remoteBytes) {
@@ -439,10 +516,10 @@ async function pullQueuedPhoneScreenshot(payload = {}) {
     ]).catch(() => {})
   }
 
-  const batch = getPhoneBatch(deviceId)
   batch.pending = (batch.pending || []).filter(item => item.remotePath !== remotePath)
-  if (!batch.pending.length) {
-    batch.startedAt = 0
+  batch.baseline ||= []
+  if (!batch.baseline.includes(remotePath)) {
+    batch.baseline.push(remotePath)
   }
   savePhoneBatch(deviceId, batch)
 
@@ -451,6 +528,7 @@ async function pullQueuedPhoneScreenshot(payload = {}) {
     remotePath,
     backend: 'phone-native',
     nativeScreenshot: true,
+    source: queuedItem?.source || 'guidepix',
     remoteBytes,
     ...pulled,
     pendingCount: batch.pending.length,
@@ -472,7 +550,6 @@ async function captureDocumentationScreen(payload = {}) {
   const {
     deviceId,
     savePath,
-    cleanupDeviceCopy = true,
   } = payload
 
   if (!deviceId || !savePath) {
@@ -489,7 +566,7 @@ async function captureDocumentationScreen(payload = {}) {
     deviceId,
     remotePath,
     savePath,
-    cleanupDeviceCopy,
+    cleanupDeviceCopy: payload.cleanupDeviceCopy,
   })
 }
 
@@ -506,6 +583,7 @@ export default {
     ipcMain.handle('documentation-workspace-reset', () => resetWorkspaceRoot())
     ipcMain.handle('documentation-workspace-open', (_, fallback) => openWorkspaceRoot(fallback))
     ipcMain.handle('documentation-capture-screen', (_, payload) => captureDocumentationScreen(payload))
+    ipcMain.handle('documentation-phone-batch-begin', (_, deviceId, options) => beginPhoneBatch(deviceId, options))
     ipcMain.handle('documentation-phone-capture-queue', (_, deviceId) => queuePhoneScreenshot(deviceId))
     ipcMain.handle('documentation-phone-batch-status', (_, deviceId) => getPhoneBatchStatus(deviceId))
     ipcMain.handle('documentation-phone-pull', (_, payload) => pullQueuedPhoneScreenshot(payload))
@@ -537,6 +615,7 @@ export default {
       ipcMain.removeHandler('documentation-workspace-reset')
       ipcMain.removeHandler('documentation-workspace-open')
       ipcMain.removeHandler('documentation-capture-screen')
+      ipcMain.removeHandler('documentation-phone-batch-begin')
       ipcMain.removeHandler('documentation-phone-capture-queue')
       ipcMain.removeHandler('documentation-phone-batch-status')
       ipcMain.removeHandler('documentation-phone-pull')
