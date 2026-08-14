@@ -6,8 +6,8 @@ import {
   app,
   dialog,
   ipcMain,
-  nativeImage,
   shell as electronShell,
+  nativeImage,
 } from 'electron'
 import electronStore from '$electron/helpers/store/index.js'
 import { getAdbPath } from '$electron/configs/which/index.js'
