@@ -32,6 +32,7 @@
 
 <script setup>
 import Arrange from './components/arrange/index.vue'
+import DocumentationSync from './components/documentation-sync/index.vue'
 import DocumentationWorkbench from './components/documentation-workbench/index.vue'
 import DocumentationWorkspace from './components/documentation-workspace/index.vue'
 import Log from './components/log/index.vue'
@@ -47,8 +48,14 @@ const actionModel = [
     component: DocumentationWorkbench,
   },
   {
+    label: 'GuidePix Sync',
+    title: '同步手机截图到电脑 · Ctrl+F8',
+    fontIcon: 'i-bi-cloud-arrow-down',
+    component: DocumentationSync,
+  },
+  {
     label: 'GuidePix Workspace',
-    title: '设置 GuidePix 项目保存目录',
+    title: '设置 GuidePix 项目保存位置',
     fontIcon: 'i-bi-folder-symlink',
     component: DocumentationWorkspace,
   },

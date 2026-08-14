@@ -3,6 +3,7 @@ export { default as documentationUxService } from './documentation-ux-native/ind
 export { default as documentationWorkflowService } from './documentation-workflow/index.js'
 export { default as documentationService } from './documentation/index.js'
 export { default as edgerService } from './edger/index.js'
+export { default as guidepixSessionService } from './guidepix-session/index.js'
 export { default as handlesService } from './handles/index.js'
 export { default as launchService } from './launch/index.js'
 export { default as lifecycleService } from './lifecycle/index.js'

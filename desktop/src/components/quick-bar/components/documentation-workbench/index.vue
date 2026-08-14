@@ -32,7 +32,7 @@ async function openWorkbench() {
     if (!session) {
       const saveRoot = await getWorkspaceRoot(device)
       session = await window.$preload.ipcRenderer.invoke(
-        'documentation-session-start',
+        'guidepix-session-start',
         {
           deviceId: device.id,
           deviceName: device.remark || device.name || device.model || device.id,

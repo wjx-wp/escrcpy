@@ -31,6 +31,7 @@ import {
   documentationUxService,
   documentationWorkflowService,
   edgerService,
+  guidepixSessionService,
   handlesService,
   launchService,
   lifecycleService,
@@ -62,6 +63,7 @@ mainApp.use(sandboxPlugin)
 mainApp.use(mainModule)
 mainApp.use(lifecycleService)
 mainApp.use(documentationService)
+mainApp.use(guidepixSessionService)
 mainApp.use(documentationUxService)
 mainApp.use(documentationWorkflowService)
 
