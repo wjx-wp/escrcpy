@@ -132,7 +132,7 @@ export function useDocumentationAction() {
 
     const workspaceRoot = await getWorkspaceRoot(device)
     const session = await window.$preload.ipcRenderer.invoke(
-      'documentation-session-start',
+      'guidepix-session-start',
       {
         deviceId: device.id,
         deviceName: getDeviceName(device),
@@ -153,7 +153,7 @@ export function useDocumentationAction() {
     }
 
     const session = await window.$preload.ipcRenderer.invoke(
-      'documentation-session-get',
+      'guidepix-session-get',
       device.id,
     )
 
@@ -400,7 +400,7 @@ export function useDocumentationAction() {
 
       for (const item of items) {
         const capture = await window.$preload.ipcRenderer.invoke(
-          'documentation-prepare-capture',
+          'guidepix-prepare-capture',
           {
             saveRoot: workspaceRoot,
             deviceId: device.id,
