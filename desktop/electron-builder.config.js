@@ -32,7 +32,7 @@ export default {
   ],
 
   win: {
-    icon: 'logo.svg',
+    icon: 'logo.ico',
     target: ['nsis', 'zip', 'portable'],
     artifactName: 'GuidePix-${arch}.${ext}',
     extraResources: [
@@ -68,7 +68,7 @@ export default {
   },
 
   mac: {
-    icon: 'logo.svg',
+    icon: 'logo.icns',
     target: [
       { target: 'dmg', arch: ['x64', 'arm64'] },
       { target: 'zip', arch: ['x64', 'arm64'] },
