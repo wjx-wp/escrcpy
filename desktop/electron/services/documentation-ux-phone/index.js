@@ -5,8 +5,8 @@ import { promisify } from 'node:util'
 import {
   app,
   dialog,
-  ipcMain,
   shell as electronShell,
+  ipcMain,
   nativeImage,
 } from 'electron'
 import electronStore from '$electron/helpers/store/index.js'
