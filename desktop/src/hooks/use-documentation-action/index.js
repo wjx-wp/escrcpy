@@ -1,12 +1,14 @@
 import { ElNotification } from 'element-plus'
 import { useAnnotationStore } from '$/store/annotation/index.js'
 import { useDocumentationStore } from '$/store/documentation/index.js'
+import { useDocumentationWorkflowStore } from '$/store/documentation-workflow/index.js'
 import { sleep } from '$/utils/index.js'
 
 export function useDocumentationAction() {
   const preferenceStore = usePreferenceStore()
   const annotationStore = useAnnotationStore()
   const documentationStore = useDocumentationStore()
+  const workflowStore = useDocumentationWorkflowStore()
 
   const loading = ref(false)
 
@@ -19,6 +21,23 @@ export function useDocumentationAction() {
       return undefined
     }
     return preferenceStore.getDataWithFallback(device.id)?.savePath
+  }
+
+  function plainSession(session) {
+    if (!session) {
+      return null
+    }
+    return {
+      id: session.id || '',
+      deviceId: session.deviceId || '',
+      deviceName: session.deviceName || '',
+      title: session.title || '',
+      root: session.root || '',
+      originalDir: session.originalDir || '',
+      projectDir: session.projectDir || '',
+      outputDir: session.outputDir || '',
+      startedAt: Number(session.startedAt || 0),
+    }
   }
 
   async function getWorkspaceRoot(device) {
@@ -51,12 +70,12 @@ export function useDocumentationAction() {
         documentationStore.setStatus(device.id, { captureSession: null })
       }
 
-      ElMessage.success(`GuidePix 工作目录已设置：${root}`)
+      ElMessage.success(`GuidePix 项目保存位置：${root}`)
       return root
     }
     catch (error) {
       console.warn('[documentation] Failed to choose workspace root:', error)
-      ElMessage.warning('工作目录设置暂不可用，截图仍会保存到默认目录')
+      ElMessage.warning('保存位置设置暂不可用，将继续使用默认目录')
       return null
     }
   }
@@ -231,12 +250,7 @@ export function useDocumentationAction() {
       })
 
       if (!silent) {
-        if (dnd?.tracked) {
-          ElMessage.warning('文档模式已恢复，但勿扰状态仍在等待恢复')
-        }
-        else {
-          ElMessage.success('文档模式和勿扰状态已恢复')
-        }
+        ElMessage.success('文档模式和勿扰状态已恢复')
       }
 
       return {
@@ -287,13 +301,22 @@ export function useDocumentationAction() {
     return entered
   }
 
-  async function captureOriginal(device, { ensureDemoMode = true, notify = true } = {}) {
+  async function getPendingCaptures(device) {
+    if (!device?.id) {
+      return { pendingCount: 0, pending: [] }
+    }
+    return window.$preload.ipcRenderer.invoke(
+      'documentation-phone-batch-status',
+      device.id,
+    )
+  }
+
+  async function captureToPhone(device, { ensureDemoMode = true, notify = true } = {}) {
     if (!device?.id) {
       return false
     }
 
     loading.value = true
-
     try {
       if (ensureDemoMode) {
         const demoStatus = await ensureDemo(device)
@@ -302,68 +325,22 @@ export function useDocumentationAction() {
         }
       }
 
-      const workspaceRoot = await getWorkspaceRoot(device)
-      const capture = await window.$preload.ipcRenderer.invoke(
-        'documentation-prepare-capture',
-        {
-          saveRoot: workspaceRoot,
-          deviceId: device.id,
-          deviceName: getDeviceName(device),
-        },
+      const queued = await window.$preload.ipcRenderer.invoke(
+        'documentation-phone-capture-queue',
+        device.id,
       )
-
-      documentationStore.setStatus(device.id, { captureSession: capture })
-
-      let captureResult
-      try {
-        captureResult = await window.$preload.ipcRenderer.invoke(
-          'documentation-capture-screen',
-          {
-            deviceId: device.id,
-            savePath: capture.originalPath,
-            cleanupDeviceCopy: true,
-            allowAdbFallback: false,
-          },
-        )
-      }
-      catch (error) {
-        console.warn('[documentation] Phone-native capture failed:', error)
-        ElNotification({
-          title: '手机截图没有成功拉取到电脑',
-          message: error?.message || String(error),
-          type: 'warning',
-          duration: 9000,
-          position: 'bottom-right',
-        })
-        return false
-      }
-
-      const result = {
-        ...capture,
-        captureBackend: captureResult?.backend || 'phone-native',
-        nativeScreenshot: Boolean(captureResult?.nativeScreenshot),
-        remotePath: captureResult?.remotePath || '',
-        imageWidth: captureResult?.width || 0,
-        imageHeight: captureResult?.height || 0,
-      }
 
       if (notify) {
         ElNotification({
-          title: `F8 已拉取到电脑 · ${capture.baseName}.png`,
-          message: `保存位置：${capture.originalPath}\n点击此提示打开所在文件夹`,
+          title: `手机已截图 · 待同步 ${queued.pendingCount} 张`,
+          message: '继续按 F8 可连续截图；完成后按 Ctrl+F8 一次同步到电脑。',
           type: 'success',
-          duration: 9000,
+          duration: 3500,
           position: 'bottom-right',
-          onClick: () => {
-            window.$preload.ipcRenderer.invoke(
-              'documentation-reveal-path',
-              capture.originalPath,
-            ).catch(() => {})
-          },
         })
       }
 
-      return result
+      return queued
     }
     catch (error) {
       ElMessage.warning(error?.message || String(error))
@@ -374,8 +351,134 @@ export function useDocumentationAction() {
     }
   }
 
+  async function refreshOpenWorkbench(session) {
+    if (!workflowStore.visible || !session?.root) {
+      return
+    }
+
+    const current = workflowStore.session
+    if (current?.root && current.root !== session.root) {
+      return
+    }
+
+    const manifest = await window.$preload.ipcRenderer.invoke(
+      'documentation-workflow-get',
+      {
+        root: session.root,
+        session: plainSession(session),
+      },
+    ).catch(() => null)
+
+    if (manifest) {
+      workflowStore.setManifest(manifest)
+    }
+  }
+
+  async function syncPendingCaptures(
+    device,
+    { latestOnly = false, notify = true } = {},
+  ) {
+    if (!device?.id) {
+      return false
+    }
+
+    loading.value = true
+    try {
+      const pendingStatus = await getPendingCaptures(device)
+      const pending = pendingStatus?.pending || []
+      const items = latestOnly ? pending.slice(-1) : pending
+
+      if (!items.length) {
+        if (notify) {
+          ElMessage.info('没有待同步的手机截图')
+        }
+        return []
+      }
+
+      const workspaceRoot = await getWorkspaceRoot(device)
+      const results = []
+
+      for (const item of items) {
+        const capture = await window.$preload.ipcRenderer.invoke(
+          'documentation-prepare-capture',
+          {
+            saveRoot: workspaceRoot,
+            deviceId: device.id,
+            deviceName: getDeviceName(device),
+          },
+        )
+
+        const pulled = await window.$preload.ipcRenderer.invoke(
+          'documentation-phone-pull',
+          {
+            deviceId: device.id,
+            remotePath: item.remotePath,
+            savePath: capture.originalPath,
+            cleanupDeviceCopy: true,
+          },
+        )
+
+        results.push({
+          ...capture,
+          ...pulled,
+          captureBackend: 'phone-native',
+        })
+        documentationStore.setStatus(device.id, { captureSession: capture })
+      }
+
+      const last = results[results.length - 1]
+      if (last) {
+        await refreshOpenWorkbench(last)
+      }
+
+      if (notify && last) {
+        ElNotification({
+          title: `已同步 ${results.length} 张到电脑`,
+          message: `项目目录：${last.root}\n点击打开`,
+          type: 'success',
+          duration: 8000,
+          position: 'bottom-right',
+          onClick: () => {
+            window.$preload.ipcRenderer.invoke(
+              'documentation-reveal-path',
+              last.root,
+            ).catch(() => {})
+          },
+        })
+      }
+
+      return results
+    }
+    catch (error) {
+      ElNotification({
+        title: '同步手机截图失败',
+        message: error?.message || String(error),
+        type: 'warning',
+        duration: 9000,
+        position: 'bottom-right',
+      })
+      return false
+    }
+    finally {
+      loading.value = false
+    }
+  }
+
+  async function captureOriginal(device, options = {}) {
+    return captureToPhone(device, options)
+  }
+
   async function captureAndAnnotate(device) {
-    const capture = await captureOriginal(device, { notify: false })
+    const queued = await captureToPhone(device, { notify: false })
+    if (!queued) {
+      return false
+    }
+
+    const results = await syncPendingCaptures(device, {
+      latestOnly: true,
+      notify: false,
+    })
+    const capture = results?.[results.length - 1]
     if (!capture) {
       return false
     }
@@ -428,7 +531,7 @@ export function useDocumentationAction() {
   async function openSessionFolder(device) {
     const session = await getCaptureSession(device).catch(() => null)
     if (!session?.root) {
-      ElMessage.info('当前还没有文档会话目录')
+      ElMessage.info('当前还没有 GuidePix 项目目录')
       return false
     }
 
@@ -449,6 +552,9 @@ export function useDocumentationAction() {
     enter,
     exit,
     toggle,
+    getPendingCaptures,
+    captureToPhone,
+    syncPendingCaptures,
     captureOriginal,
     captureAndAnnotate,
     openProject,
