@@ -51,12 +51,12 @@ export function useDocumentationAction() {
         documentationStore.setStatus(device.id, { captureSession: null })
       }
 
-      ElMessage.success(`文档工作目录已设置：${root}`)
+      ElMessage.success(`GuidePix 工作目录已设置：${root}`)
       return root
     }
     catch (error) {
       console.warn('[documentation] Failed to choose workspace root:', error)
-      ElMessage.warning('文档目录设置暂不可用，截图仍会保存到默认目录')
+      ElMessage.warning('工作目录设置暂不可用，截图仍会保存到默认目录')
       return null
     }
   }
@@ -161,8 +161,6 @@ export function useDocumentationAction() {
         return false
       }
 
-      // Demo Mode is the core state. Record it immediately so optional helpers
-      // cannot leave the UI in a false "not in documentation mode" state.
       documentationStore.setStatus(device.id, {
         ...(status || { active: true, tracked: true }),
         captureSession: null,
@@ -247,7 +245,6 @@ export function useDocumentationAction() {
       }
     }
     catch (error) {
-      // Demo restore failed; still make a best effort to restore DND.
       await window.$preload.ipcRenderer.invoke(
         'documentation-dnd-exit',
         device.id,
@@ -324,34 +321,16 @@ export function useDocumentationAction() {
           {
             deviceId: device.id,
             savePath: capture.originalPath,
-            secureFallback: true,
             cleanupDeviceCopy: true,
+            allowAdbFallback: false,
           },
         )
       }
       catch (error) {
-        // Keep the old raw ADB path as a hard fallback so a future optional
-        // capture helper regression never disables ordinary screenshots.
-        console.warn('[documentation] Secure-aware capture unavailable, using raw ADB:', error)
-        await window.$preload.adb.screencap(device.id, {
-          savePath: capture.originalPath,
-        })
-        captureResult = {
-          backend: 'adb',
-          secureBlack: false,
-          fallbackAttempted: false,
-        }
-      }
-
-      if (captureResult?.secureBlack) {
-        const rootText = captureResult.rootAvailable ? 'Root ✓' : 'Root 未检测到'
-        const moduleText = captureResult.enableScreenshotModule
-          ? 'Enable Screenshot ✓'
-          : 'Enable Screenshot 未检测到'
-
+        console.warn('[documentation] Phone-native capture failed:', error)
         ElNotification({
-          title: '检测到安全窗口，截图仍被系统保护',
-          message: `${rootText} · ${moduleText}。已尝试 SystemUI 截图回退；请确认 LSPosed 模块已启用并重启手机。`,
+          title: '手机截图没有成功拉取到电脑',
+          message: error?.message || String(error),
           type: 'warning',
           duration: 9000,
           position: 'bottom-right',
@@ -361,18 +340,19 @@ export function useDocumentationAction() {
 
       const result = {
         ...capture,
-        captureBackend: captureResult?.backend || 'adb',
-        secureFallbackUsed: captureResult?.backend === 'systemui',
+        captureBackend: captureResult?.backend || 'phone-native',
+        nativeScreenshot: Boolean(captureResult?.nativeScreenshot),
+        remotePath: captureResult?.remotePath || '',
+        imageWidth: captureResult?.width || 0,
+        imageHeight: captureResult?.height || 0,
       }
 
       if (notify) {
         ElNotification({
-          title: result.secureFallbackUsed
-            ? `F8 已保存 · 安全窗口回退 · ${capture.baseName}.png`
-            : `F8 已保存 · ${capture.baseName}.png`,
-          message: capture.originalPath,
+          title: `F8 已拉取到电脑 · ${capture.baseName}.png`,
+          message: `保存位置：${capture.originalPath}\n点击此提示打开所在文件夹`,
           type: 'success',
-          duration: 5500,
+          duration: 9000,
           position: 'bottom-right',
           onClick: () => {
             window.$preload.ipcRenderer.invoke(
