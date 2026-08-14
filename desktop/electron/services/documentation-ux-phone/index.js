@@ -2,7 +2,13 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { app, dialog, shell as electronShell, ipcMain } from 'electron'
+import {
+  app,
+  dialog,
+  ipcMain,
+  nativeImage,
+  shell as electronShell,
+} from 'electron'
 import electronStore from '$electron/helpers/store/index.js'
 import { getAdbPath } from '$electron/configs/which/index.js'
 
@@ -202,7 +208,7 @@ function getWorkspaceRoot(fallback) {
 async function chooseWorkspaceRoot(fallback) {
   const current = getWorkspaceRoot(fallback)
   const result = await dialog.showOpenDialog({
-    title: '选择文档截图工作目录',
+    title: '选择 GuidePix 工作目录',
     defaultPath: current,
     properties: ['openDirectory', 'createDirectory'],
     buttonLabel: '使用此目录',
@@ -239,7 +245,7 @@ async function getSystemScreenshotCandidates(deviceId) {
   const command = [
     `for d in ${dirs}; do`,
     'if [ -d "$d" ]; then',
-    'ls -1t "$d"/*.png "$d"/*.jpg "$d"/*.jpeg 2>/dev/null | head -n 2',
+    'ls -1t "$d"/*.png "$d"/*.jpg "$d"/*.jpeg "$d"/*.webp 2>/dev/null | head -n 3',
     'fi',
     'done',
   ].join(' ')
@@ -254,7 +260,7 @@ async function getSystemScreenshotCandidates(deviceId) {
 async function waitForNewSystemScreenshot(deviceId, before) {
   const previous = new Set(before)
 
-  for (let attempt = 0; attempt < 24; attempt += 1) {
+  for (let attempt = 0; attempt < 32; attempt += 1) {
     await sleep(250)
     const current = await getSystemScreenshotCandidates(deviceId)
     const fresh = current.find(item => !previous.has(item))
@@ -266,38 +272,121 @@ async function waitForNewSystemScreenshot(deviceId, before) {
   return null
 }
 
+async function getRemoteFileSize(deviceId, remotePath) {
+  const output = await runShell(deviceId, [
+    'sh',
+    '-c',
+    `wc -c < ${shellQuote(remotePath)} 2>/dev/null`,
+  ]).catch(() => '')
+
+  const value = Number.parseInt(String(output || '').trim(), 10)
+  return Number.isFinite(value) ? value : 0
+}
+
+async function waitForRemoteFileStable(deviceId, remotePath) {
+  let lastSize = 0
+  let stableCount = 0
+
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    await sleep(200)
+    const size = await getRemoteFileSize(deviceId, remotePath)
+
+    if (size > 1024 && size === lastSize) {
+      stableCount += 1
+      if (stableCount >= 3) {
+        await sleep(250)
+        return size
+      }
+    }
+    else {
+      stableCount = 0
+    }
+
+    lastSize = size
+  }
+
+  return 0
+}
+
+async function pullPhoneScreenshot(deviceId, remotePath, savePath) {
+  await fs.promises.mkdir(path.dirname(savePath), { recursive: true })
+
+  const remoteExt = path.extname(remotePath).toLowerCase() || '.img'
+  const tempPath = `${savePath}.phone${remoteExt}`
+
+  await fs.promises.unlink(tempPath).catch(() => {})
+  await runAdb(deviceId, ['pull', remotePath, tempPath])
+
+  const stat = await fs.promises.stat(tempPath).catch(() => null)
+  if (!stat?.isFile() || stat.size <= 1024) {
+    await fs.promises.unlink(tempPath).catch(() => {})
+    throw new Error('手机截图文件没有完整拉取到电脑')
+  }
+
+  const image = nativeImage.createFromPath(tempPath)
+  const size = image.getSize()
+  if (image.isEmpty() || !size.width || !size.height) {
+    await fs.promises.unlink(tempPath).catch(() => {})
+    throw new Error('手机截图已拉取，但图片文件尚未写完整')
+  }
+
+  if (remoteExt === '.png') {
+    await fs.promises.unlink(savePath).catch(() => {})
+    await fs.promises.rename(tempPath, savePath)
+  }
+  else {
+    const png = image.toPNG()
+    if (!png.length) {
+      await fs.promises.unlink(tempPath).catch(() => {})
+      throw new Error('手机截图无法转换为 PNG')
+    }
+    await fs.promises.writeFile(savePath, png)
+    await fs.promises.unlink(tempPath).catch(() => {})
+  }
+
+  const localStat = await fs.promises.stat(savePath)
+  return {
+    bytes: localStat.size,
+    width: size.width,
+    height: size.height,
+  }
+}
+
 async function captureViaPhone(deviceId, savePath, { cleanupDeviceCopy = true } = {}) {
   const before = await getSystemScreenshotCandidates(deviceId)
 
-  // Trigger Android/SystemUI's native screenshot flow. On rooted devices the
-  // user's LSPosed screenshot module participates exactly as with a phone-side
-  // screenshot gesture/button combination.
+  // Trigger the phone/SystemUI screenshot path so root/LSPosed screenshot
+  // hooks participate in the same path as a normal phone-side screenshot.
   await runShell(deviceId, ['input', 'keyevent', '120'])
   const remotePath = await waitForNewSystemScreenshot(deviceId, before)
 
   if (!remotePath) {
     return {
       success: false,
-      reason: 'phone-screenshot-not-created',
+      reason: '手机已经触发截图，但 GuidePix 没有在常用截图目录找到新文件',
     }
   }
 
-  const buffer = await runAdbBuffer(deviceId, [
-    'exec-out',
-    'sh',
-    '-c',
-    `cat ${shellQuote(remotePath)}`,
-  ])
-
-  if (!buffer.length) {
+  const remoteBytes = await waitForRemoteFileStable(deviceId, remotePath)
+  if (!remoteBytes) {
     return {
       success: false,
-      reason: 'phone-screenshot-empty',
+      reason: '已找到手机截图，但文件一直没有进入稳定可读取状态',
+      remotePath,
     }
   }
 
-  await fs.promises.mkdir(path.dirname(savePath), { recursive: true })
-  await fs.promises.writeFile(savePath, buffer)
+  let pulled
+  try {
+    pulled = await pullPhoneScreenshot(deviceId, remotePath, savePath)
+  }
+  catch (error) {
+    return {
+      success: false,
+      reason: error?.message || String(error),
+      remotePath,
+    }
+  }
 
   if (cleanupDeviceCopy) {
     await runShell(deviceId, [
@@ -310,6 +399,8 @@ async function captureViaPhone(deviceId, savePath, { cleanupDeviceCopy = true } 
   return {
     success: true,
     remotePath,
+    remoteBytes,
+    ...pulled,
   }
 }
 
@@ -329,6 +420,7 @@ async function captureDocumentationScreen(payload = {}) {
     deviceId,
     savePath,
     cleanupDeviceCopy = true,
+    allowAdbFallback = false,
   } = payload
 
   if (!deviceId || !savePath) {
@@ -345,14 +437,21 @@ async function captureDocumentationScreen(payload = {}) {
   if (phoneCapture.success) {
     return {
       savePath,
-      backend: 'native',
+      backend: 'phone-native',
       nativeScreenshot: true,
       remotePath: phoneCapture.remotePath,
+      bytes: phoneCapture.bytes,
+      width: phoneCapture.width,
+      height: phoneCapture.height,
       fallbackAttempted: false,
     }
   }
 
-  console.warn('[documentation] Phone-native screenshot failed, falling back to ADB:', phoneCapture.reason)
+  if (!allowAdbFallback) {
+    throw new Error(`手机截图未能拉取到电脑：${phoneCapture.reason || '未知原因'}。手机相册中的截图不会受影响。`)
+  }
+
+  console.warn('[documentation] Phone-native screenshot failed, explicitly falling back to ADB:', phoneCapture.reason)
   await captureViaAdb(deviceId, savePath)
 
   return {
